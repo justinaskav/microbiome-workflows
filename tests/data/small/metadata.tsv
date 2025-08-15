@@ -1,0 +1,7 @@
+SampleID	Sample	Group	Patient	Gut_Site	Age	Sex	DNA_concentration	Decontam_Control
+#q2:types	categorical	categorical	categorical	categorical	numeric	categorical	numeric	categorical
+Test001	Test001	Control	1	Ileum	45	F	125.0	Sample
+Test002	Test002	Control	1	Distal	45	F	130.0	Sample
+Test003	Test003	Treatment	2	Ileum	52	M	115.0	Sample
+Test004	Test004	Treatment	2	Distal	52	M	140.0	Sample
+Blank001	Blank001	Blank	NA	NA	NA	NA	0.1	Negative Control
