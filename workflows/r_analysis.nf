@@ -38,12 +38,12 @@ workflow R_MICROBIOME_ANALYSIS {
     // Merge with user config
     def config = default_config + (analysis_config ?: [:])
 
-    // Set up script channels (these will be copied from the microbiome-shared repository)
-    prepare_script = Channel.fromPath("${projectDir}/../microbiome-shared/R/prepare_data.R")
-    alpha_script = Channel.fromPath("${projectDir}/../microbiome-shared/R/calc_alpha_diversity.R") 
-    beta_script = Channel.fromPath("${projectDir}/../microbiome-shared/R/calc_beta_diversity.R")
-    ancombc2_script = Channel.fromPath("${projectDir}/../microbiome-shared/R/calc_ancombc2.R")
-    maaslin3_script = Channel.fromPath("${projectDir}/../microbiome-shared/R/calc_maaslin3.R")
+    // Set up script channels (these will be copied from the microbiome-shared submodule)
+    prepare_script = Channel.fromPath("${projectDir}/../shared/R/prepare_data.R")
+    alpha_script = Channel.fromPath("${projectDir}/../shared/R/calc_alpha_diversity.R") 
+    beta_script = Channel.fromPath("${projectDir}/../shared/R/calc_beta_diversity.R")
+    ancombc2_script = Channel.fromPath("${projectDir}/../shared/R/calc_ancombc2.R")
+    maaslin3_script = Channel.fromPath("${projectDir}/../shared/R/calc_maaslin3.R")
 
     // Prepare TreeSummarizedExperiment (TSE) data from QIIME2 artifacts
     tse_results = PREPARE_TSE_DATA(
@@ -129,7 +129,7 @@ workflow TAXONOMIC_COMPOSITION_ANALYSIS {
     grouping_vars          // Variables to group by (e.g., ["Group", "Gut.Site"])
     
     main:
-    composition_script = Channel.fromPath("${projectDir}/../microbiome-shared/R/calc_composition.R")
+    composition_script = Channel.fromPath("${projectDir}/../shared/R/calc_composition.R")
     
     // Calculate taxonomic composition
     composition_results = CALC_TAXONOMIC_COMPOSITION(
