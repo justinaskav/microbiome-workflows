@@ -5,6 +5,7 @@
 params.decontam_freq_concentration_column = 'DNA concentration'
 params.decontam_prev_control_column = 'Decontam Control'
 params.decontam_prev_control_indicator = 'Negative Control'
+params.decontam_threshold = 0.1  // Default p-value threshold for filtering contaminants
 
 // Process to identify contaminants using frequency method (based on DNA concentration)
 process DECONTAM_IDENTIFY_FREQUENCY {
@@ -76,29 +77,52 @@ process DECONTAM_IDENTIFY_PREVALENCE {
     """
 }
 
-// Process to remove identified contaminants from feature table and representative sequences
-process DECONTAM_REMOVE {
-    tag "decontam_remove"
+// Process to remove identified contaminants from feature table using feature-table filter
+process DECONTAM_FILTER_TABLE {
+    tag "decontam_filter_table"
     conda "${params.qiime2_conda_env}"
 
     input:
     path decontam_scores_qza  // Decontam scores (QZA)
     path feature_table_qza    // Original feature table (QZA)
-    path rep_seqs_qza         // Representative sequences (QZA)
+    val threshold             // P-value threshold for filtering (default: 0.1)
 
     output:
     path("decontam_filtered_table.qza"), emit: filtered_table
+
+    script:
+    def filter_threshold = threshold ?: 0.1
+    """
+    # Filter feature table based on decontam scores
+    # Keep features where p > THRESHOLD OR p IS NULL (non-contaminants)
+    qiime feature-table filter-features \\
+        --i-table ${feature_table_qza} \\
+        --m-metadata-file ${decontam_scores_qza} \\
+        --p-where '[p]>${filter_threshold} OR [p] IS NULL' \\
+        --o-filtered-table decontam_filtered_table.qza \\
+        --verbose
+    """
+}
+
+// Process to filter representative sequences based on filtered feature table
+process DECONTAM_FILTER_SEQS {
+    tag "decontam_filter_seqs"
+    conda "${params.qiime2_conda_env}"
+
+    input:
+    path rep_seqs_qza         // Representative sequences (QZA)
+    path filtered_table_qza   // Filtered feature table (QZA)
+
+    output:
     path("decontam_filtered_seqs.qza"), emit: filtered_seqs
 
     script:
     """
-    # Remove contaminants from feature table
-    qiime quality-control decontam-remove \\
-        --i-decontam-scores ${decontam_scores_qza} \\
-        --i-table ${feature_table_qza} \\
-        --i-rep-seqs ${rep_seqs_qza} \\
-        --o-filtered-table decontam_filtered_table.qza \\
-        --o-filtered-rep-seqs decontam_filtered_seqs.qza \\
+    # Filter representative sequences to match filtered feature table
+    qiime feature-table filter-seqs \\
+        --i-data ${rep_seqs_qza} \\
+        --i-table ${filtered_table_qza} \\
+        --o-filtered-data decontam_filtered_seqs.qza \\
         --verbose
     """
 }
@@ -110,10 +134,12 @@ workflow WF_DECONTAM_FREQUENCY {
     rep_seqs_qza             // Representative sequences from DADA2
     metadata_tsv             // Metadata file
     concentration_column     // Column name for DNA concentration (optional, defaults to params)
+    threshold                // P-value threshold for filtering (optional, defaults to params.decontam_threshold)
 
     main:
     // Use provided column name or default parameter
     def conc_column = concentration_column ?: params.decontam_freq_concentration_column
+    def filter_threshold = threshold ?: params.decontam_threshold
 
     // Identify contaminants using frequency method
     decontam_identify_results = DECONTAM_IDENTIFY_FREQUENCY(
@@ -122,18 +148,24 @@ workflow WF_DECONTAM_FREQUENCY {
         conc_column
     )
 
-    // Remove identified contaminants
-    decontam_remove_results = DECONTAM_REMOVE(
+    // Filter feature table based on decontam scores
+    filtered_table_results = DECONTAM_FILTER_TABLE(
         decontam_identify_results.decontam_scores,
         feature_table_qza,
-        rep_seqs_qza
+        filter_threshold
+    )
+
+    // Filter representative sequences based on filtered table
+    filtered_seqs_results = DECONTAM_FILTER_SEQS(
+        rep_seqs_qza,
+        filtered_table_results.filtered_table
     )
 
     emit:
     decontam_scores = decontam_identify_results.decontam_scores
     decontam_scores_viz = decontam_identify_results.decontam_scores_viz
-    filtered_table = decontam_remove_results.filtered_table
-    filtered_seqs = decontam_remove_results.filtered_seqs
+    filtered_table = filtered_table_results.filtered_table
+    filtered_seqs = filtered_seqs_results.filtered_seqs
 }
 
 // Workflow for prevalence-based decontamination
@@ -144,11 +176,13 @@ workflow WF_DECONTAM_PREVALENCE {
     metadata_tsv             // Metadata file
     control_column           // Column name for control identification (optional, defaults to params)
     control_indicator        // Value indicating control samples (optional, defaults to params)
+    threshold                // P-value threshold for filtering (optional, defaults to params.decontam_threshold)
 
     main:
     // Use provided parameters or defaults
     def ctrl_column = control_column ?: params.decontam_prev_control_column
     def ctrl_indicator = control_indicator ?: params.decontam_prev_control_indicator
+    def filter_threshold = threshold ?: params.decontam_threshold
 
     // Identify contaminants using prevalence method
     decontam_identify_results = DECONTAM_IDENTIFY_PREVALENCE(
@@ -158,16 +192,22 @@ workflow WF_DECONTAM_PREVALENCE {
         ctrl_indicator
     )
 
-    // Remove identified contaminants
-    decontam_remove_results = DECONTAM_REMOVE(
+    // Filter feature table based on decontam scores
+    filtered_table_results = DECONTAM_FILTER_TABLE(
         decontam_identify_results.decontam_scores,
         feature_table_qza,
-        rep_seqs_qza
+        filter_threshold
+    )
+
+    // Filter representative sequences based on filtered table
+    filtered_seqs_results = DECONTAM_FILTER_SEQS(
+        rep_seqs_qza,
+        filtered_table_results.filtered_table
     )
 
     emit:
     decontam_scores = decontam_identify_results.decontam_scores
     decontam_scores_viz = decontam_identify_results.decontam_scores_viz
-    filtered_table = decontam_remove_results.filtered_table
-    filtered_seqs = decontam_remove_results.filtered_seqs
+    filtered_table = filtered_table_results.filtered_table
+    filtered_seqs = filtered_seqs_results.filtered_seqs
 }

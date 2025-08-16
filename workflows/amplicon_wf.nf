@@ -1,4 +1,4 @@
-// Reusable Novogene Amplicon Processing Workflow
+// Reusable Amplicon Processing Workflow
 // All parameters should be set in project-specific nextflow.config files
 
 nextflow.enable.dsl = 2
@@ -6,8 +6,9 @@ nextflow.enable.dsl = 2
 // Include required workflows and modules
 include { PRECLASSIFY_SILVA } from '../modules/silva/preclassify_silva_wf.nf'
 include { WF_QUALITY_CONTROL; WF_QUALITY_CONTROL as WF_QUALITY_CONTROL_AFTER_CUTADAPT } from '../modules/quality_control/quality_control_wf.nf'
-include { WF_NOVOGENE_CUTADAPT } from '../modules/novogene/novogene_cutadapt_wf.nf'
-include { WF_DENOISE_NOVOGENE_DADA2 } from '../modules/dada2/denoising_dada2_wf.nf'
+include { WF_CUTADAPT } from '../modules/sequencing/cutadapt_wf.nf'
+include { WF_PARSE_NOVOGENE_SAMPLESEQ } from '../modules/novogene/sampleseq_wf.nf'
+include { WF_DENOISE_DADA2 } from '../modules/dada2/denoising_dada2_wf.nf'
 include { WF_FILTER_BY_METADATA } from '../modules/data_processing/filter_by_metadata_wf.nf'
 include { WF_DECONTAM_FREQUENCY; WF_DECONTAM_PREVALENCE } from '../modules/decontam/decontam_wf.nf'
 include { CLASSIFY_TAXONOMY } from '../modules/taxonomy/classify_taxonomy_wf.nf'
@@ -19,7 +20,7 @@ include { COMPARE_TAXONOMY_ARTIFACTS } from '../modules/taxonomy/taxonomy_compar
 include { WF_UNZIP_DATA } from '../modules/data_processing/unzip_data_wf.nf'
 
 // Named workflow that can be called from other workflows
-workflow NOVOGENE_AMPLICON_WORKFLOW {
+workflow AMPLICON_WORKFLOW {
     take:
     data_dir                    // Data directory path
     zip_filename               // Zip filename (without .zip extension), null for unzipped data
@@ -81,13 +82,22 @@ workflow NOVOGENE_AMPLICON_WORKFLOW {
     // Run regular quality control on original reads for comparison
     WF_QUALITY_CONTROL(read_pairs_ch)
 
-    // Run Novogene QC and cutadapt workflow
+    // Parse SampleSeq info if available (for Novogene data)
+    if (zip_filename != null) {
+        barcode_primer_info_ch = WF_PARSE_NOVOGENE_SAMPLESEQ(
+            sampleseq_file_ch,
+            batch_samples_with_additional_barcodes
+        ).barcode_primer_info
+    } else {
+        barcode_primer_info_ch = Channel.empty()
+    }
+
+    // Run cutadapt workflow
     // Both zipped data (batch1/2) and standard format data (batch3) need cutadapt trimming
-    trimming_results = WF_NOVOGENE_CUTADAPT(
+    trimming_results = WF_CUTADAPT(
         read_pairs_ch,
-        sampleseq_file_ch,
+        barcode_primer_info_ch,
         true,  // Always enable cutadapt
-        batch_samples_with_additional_barcodes,
         primer_f,
         primer_r,
         skip_polyg_trim
@@ -108,7 +118,7 @@ workflow NOVOGENE_AMPLICON_WORKFLOW {
 
     // Use the passed SILVA classifier (created externally)
 
-    dada2_output_ch = WF_DENOISE_NOVOGENE_DADA2(
+    dada2_output_ch = WF_DENOISE_DADA2(
         trimmed_sequences_for_dada2,
         batch_dada2_trunc_len_f,
         batch_dada2_trunc_len_r,
@@ -135,7 +145,8 @@ workflow NOVOGENE_AMPLICON_WORKFLOW {
             filtering_results_ch.filtered_feature_table,
             filtering_results_ch.filtered_rep_seqs,
             metadata_ch,
-            params.decontam_freq_concentration_column
+            params.decontam_freq_concentration_column,
+            params.decontam_threshold
         )
 
         // Use decontaminated results for downstream analysis
@@ -151,7 +162,8 @@ workflow NOVOGENE_AMPLICON_WORKFLOW {
             filtering_results_ch.filtered_rep_seqs,
             metadata_ch,
             params.decontam_prev_control_column,
-            params.decontam_prev_control_indicator
+            params.decontam_prev_control_indicator,
+            params.decontam_threshold
         )
 
         // Use decontaminated results for downstream analysis
@@ -229,9 +241,9 @@ workflow NOVOGENE_AMPLICON_WORKFLOW {
     
     // Denoising outputs
     dada2_denoising_stats = dada2_denoising_stats
-    dada2_ft_summary = WF_DENOISE_NOVOGENE_DADA2.out.feature_table_summary
-    dada2_rep_seqs_summary = WF_DENOISE_NOVOGENE_DADA2.out.rep_seqs_summary
-    dada2_denoising_stats_summary = WF_DENOISE_NOVOGENE_DADA2.out.denoising_stats_summary
+    dada2_ft_summary = WF_DENOISE_DADA2.out.feature_table_summary
+    dada2_rep_seqs_summary = WF_DENOISE_DADA2.out.rep_seqs_summary
+    dada2_denoising_stats_summary = WF_DENOISE_DADA2.out.denoising_stats_summary
 
     // Decontamination outputs
     decontam_scores_freq = decontam_scores_freq

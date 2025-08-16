@@ -1,40 +1,7 @@
-// Novogene-specific cutadapt workflow for trimming sequence reads
-// Based on experiment.py implementation and Novogene SampleSeq_info.xls format
+// Generic cutadapt workflow for trimming sequence reads
+// Works with any paired-end sequencing data
 
-process PARSE_SAMPLESEQ_INFO {
-    tag "Parse SampleSeq_info.xls"
-
-    input:
-    path sampleseq_file
-    val samples_with_additional_barcodes
-
-    output:
-    path "sample_barcode_primer_info.tsv", emit: barcode_primer_info
-
-    script:
-    def additional_barcodes_cmd = ""
-    if (samples_with_additional_barcodes) {
-        additional_barcodes_cmd = samples_with_additional_barcodes.collect { sample, barcodes ->
-            "${sample}\t${barcodes[0]}\t${barcodes[1]}"
-        }.join('\n')
-    }
-    if (additional_barcodes_cmd) {
-        """
-        python3 ${moduleDir}/../scripts/parse_sampleseq_info.py \
-            ${sampleseq_file} \
-            --additional-barcodes "${additional_barcodes_cmd}" \
-            -o sample_barcode_primer_info.tsv
-        """
-    } else {
-        """
-        python3 ${moduleDir}/../scripts/parse_sampleseq_info.py \
-            ${sampleseq_file} \
-            -o sample_barcode_primer_info.tsv
-        """
-    }
-}
-
-process IMPORT_NOVOGENE_SEQUENCES {
+process IMPORT_SEQUENCES {
     tag "Import ${sampleId}"
     
     conda params.qiime2_conda_env
@@ -63,7 +30,7 @@ process IMPORT_NOVOGENE_SEQUENCES {
     """
 }
 
-process TRIM_NOVOGENE_CUTADAPT {
+process TRIM_CUTADAPT {
     tag "Trim ${sampleId}"
     
     conda params.qiime2_conda_env
@@ -260,24 +227,22 @@ process TRIM_MERGED_CUTADAPT {
     """
 }
 
-// Main workflow for Novogene cutadapt
-workflow WF_NOVOGENE_CUTADAPT {
+// Main workflow for cutadapt trimming
+workflow WF_CUTADAPT {
     take:
-    read_pairs_ch           // Channel with sample ID and read pairs from unzipped data
-    sampleseq_file_ch       // Channel with SampleSeq_info.xls file (optional)
+    read_pairs_ch           // Channel with sample ID and read pairs
+    barcode_primer_info_ch  // Channel with barcode/primer info (optional)
     use_cutadapt            // Boolean to enable cutadapt
-    samples_with_additional_barcodes // Map of samples with special barcodes
-    primer_f                // Forward primer (for unzipped data), null to use SampleSeq from zip
-    primer_r                // Reverse primer (for unzipped data), null to use SampleSeq from zip
-    skip_polyg_trim // Boolean to skip polyG trimming
+    primer_f                // Forward primer (for direct specification), null to use barcode_primer_info
+    primer_r                // Reverse primer (for direct specification), null to use barcode_primer_info
+    skip_polyg_trim         // Boolean to skip polyG trimming
     
     main:
     if (use_cutadapt) {
         
         if (primer_f != null && primer_r != null) {
             // OPTIMIZED PATH: Direct import → cutadapt → DADA2 for same primers
-            // This is used when no zip_filename is provided and primers are explicit
-            // Stage fastq files with proper Casava naming
+            // This is used when primers are explicitly provided
             staged_fastqs_ch = STAGE_FASTQS_FOR_IMPORT(read_pairs_ch)
                 .map { r1, r2 -> 
                     [r1, r2] 
@@ -313,16 +278,10 @@ workflow WF_NOVOGENE_CUTADAPT {
             
         } else {
             // TRADITIONAL PATH: Individual sample processing for barcoded data
-            // This is used when zip_filename is provided with SampleSeq file
+            // This is used when barcode_primer_info is provided
             
             // Import sequences for each sample into QIIME2 format
-            demux_artifacts_ch = IMPORT_NOVOGENE_SEQUENCES(read_pairs_ch)
-            
-            // Use SampleSeq file (for zipped data)
-            barcode_primer_info_ch = PARSE_SAMPLESEQ_INFO(
-                sampleseq_file_ch,
-                samples_with_additional_barcodes
-            ).barcode_primer_info
+            demux_artifacts_ch = IMPORT_SEQUENCES(read_pairs_ch)
             
             // Create a channel with barcode/primer info for each sample
             barcode_primer_info_ch
@@ -340,7 +299,7 @@ workflow WF_NOVOGENE_CUTADAPT {
                 }
             
             // Run cutadapt for each sample
-            trimmed_artifacts_ch = TRIM_NOVOGENE_CUTADAPT(
+            trimmed_artifacts_ch = TRIM_CUTADAPT(
                 trimming_input_ch.map { it -> [it[0], it[1]] }, // sampleId, demuxArtifact
                 trimming_input_ch.map { it -> it[2] },          // barcode_f
                 trimming_input_ch.map { it -> it[3] },          // barcode_r
