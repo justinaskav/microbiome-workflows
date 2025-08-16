@@ -5,8 +5,8 @@ nextflow.enable.dsl = 2
 
 // Include required modules
 include { WF_QUALITY_CONTROL; WF_QUALITY_CONTROL as WF_QUALITY_CONTROL_AFTER_CUTADAPT } from '../modules/quality_control/quality_control_wf.nf'
-include { WF_NOVOGENE_CUTADAPT } from '../modules/novogene/novogene_cutadapt_wf.nf'
-include { WF_DENOISE_NOVOGENE_DADA2 } from '../modules/dada2/denoising_dada2_wf.nf'
+include { WF_CUTADAPT } from '../modules/sequencing/cutadapt_wf.nf'
+include { WF_DENOISE_DADA2 } from '../modules/dada2/denoising_dada2_wf.nf'
 include { WF_FILTER_BY_METADATA } from '../modules/data_processing/filter_by_metadata_wf.nf'
 include { WF_DECONTAM_FREQUENCY; WF_DECONTAM_PREVALENCE } from '../modules/decontam/decontam_wf.nf'
 include { CLASSIFY_TAXONOMY } from '../modules/taxonomy/classify_taxonomy_wf.nf'
@@ -85,7 +85,7 @@ workflow QIIME2_AMPLICON_PROCESSING {
     WF_QUALITY_CONTROL(read_pairs_ch)
 
     // Run cutadapt workflow
-    trimming_results = WF_NOVOGENE_CUTADAPT(
+    trimming_results = WF_CUTADAPT(
         read_pairs_ch,
         sampleseq_file_ch,
         true,  // enable cutadapt
@@ -102,14 +102,14 @@ workflow QIIME2_AMPLICON_PROCESSING {
         }
         .set { exported_fastqs_pairs_ch }
 
-    // Use trimmed sequences for downstream analysis
-    trimmed_sequences_for_dada2 = trimming_results.trimmed_sequences
+    // Use exported fastqs for downstream analysis (DADA2 needs raw FASTQ files)
+    trimmed_sequences_for_dada2 = exported_fastqs_pairs_ch
 
     // Run QC on the exported fastqs after cutadapt
     WF_QUALITY_CONTROL_AFTER_CUTADAPT(exported_fastqs_pairs_ch)
 
     // DADA2 denoising
-    dada2_output_ch = WF_DENOISE_NOVOGENE_DADA2(
+    dada2_output_ch = WF_DENOISE_DADA2(
         trimmed_sequences_for_dada2,
         dada2_trunc_len_f,
         dada2_trunc_len_r,

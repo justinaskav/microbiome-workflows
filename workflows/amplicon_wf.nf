@@ -110,8 +110,8 @@ workflow AMPLICON_WORKFLOW {
         }
         .set { exported_fastqs_pairs_ch }
 
-    // Use trimmed sequences for downstream analysis
-    trimmed_sequences_for_dada2 = trimming_results.trimmed_sequences
+    // Use exported fastqs for downstream analysis (DADA2 needs raw FASTQ files)
+    trimmed_sequences_for_dada2 = exported_fastqs_pairs_ch
 
     // Run QC on the exported fastqs after cutadapt
     WF_QUALITY_CONTROL_AFTER_CUTADAPT(exported_fastqs_pairs_ch)
