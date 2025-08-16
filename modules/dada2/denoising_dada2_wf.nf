@@ -13,7 +13,7 @@ process CREATE_DADA2_MANIFEST {
     // Each Path object's toString() method gives its path.
     def manifest_lines = ["sample-id\tforward-absolute-filepath\treverse-absolute-filepath"]
     read_pair_list.each { item ->
-        def sample_id = item[0].split("_")[0] // Extract sample ID from meta.id
+        def sample_id = item[0].toString().split("_")[0] // Extract sample ID from meta.id
         // These paths are from the fromFilePairs channel.
         // Making them explicitly absolute for the manifest is safer for QIIME2.
         def fwd_path = new File(item[1][0].toString()).getAbsolutePath()
