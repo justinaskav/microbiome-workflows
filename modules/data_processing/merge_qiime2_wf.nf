@@ -4,7 +4,6 @@
 process MERGE_FEATURE_TABLES {
     tag "Merge feature tables"
     conda "${params.qiime2_conda_env ?: 'qiime2-amplicon'}"
-    publishDir "${params.outputDir}/merged", mode: 'copy'
 
     input:
     path tables, stageAs: "table_*.qza"
@@ -25,7 +24,6 @@ process MERGE_FEATURE_TABLES {
 process MERGE_SEQUENCES {
     tag "Merge sequences"
     conda "${params.qiime2_conda_env ?: 'qiime2-amplicon'}"
-    publishDir "${params.outputDir}/merged", mode: 'copy'
 
     input:
     path sequences, stageAs: "rep-seqs_*.qza"
@@ -46,7 +44,6 @@ process MERGE_SEQUENCES {
 process MERGE_TAXONOMIES {
     tag "Merge taxonomies"
     conda "${params.qiime2_conda_env ?: 'qiime2-amplicon'}"
-    publishDir "${params.outputDir}/merged", mode: 'copy'
 
     input:
     path taxonomies, stageAs: "taxonomy_*.qza"

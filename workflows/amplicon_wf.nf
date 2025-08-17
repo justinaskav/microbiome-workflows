@@ -14,7 +14,6 @@ include { WF_DECONTAM_FREQUENCY; WF_DECONTAM_PREVALENCE } from '../modules/decon
 include { CLASSIFY_TAXONOMY } from '../modules/taxonomy/classify_taxonomy_wf.nf'
 include { WF_DADA2_TAXONOMY } from '../modules/dada2/dada2_assign_taxonomy_wf.nf'
 include { ALIGN_AND_TREE_QIIME2 } from '../modules/phylogeny/phylogeny_wf.nf'
-include { MAASLIN3_WORKFLOW } from '../modules/r_analysis/maaslin3_wf.nf'
 include { EVALUATE_TAXONOMY } from '../modules/silva/rescript_evaluate_taxonomy_wf.nf'
 include { COMPARE_TAXONOMY_ARTIFACTS } from '../modules/taxonomy/taxonomy_comparison_wf.nf'
 include { WF_UNZIP_DATA } from '../modules/data_processing/unzip_data_wf.nf'

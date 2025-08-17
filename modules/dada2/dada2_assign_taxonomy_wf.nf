@@ -143,9 +143,9 @@ workflow WF_DADA2_TAXONOMY {
     def verbose = params.dada2_add_species_verbose ?: true
     
     // Get paths to the R scripts
-    def assign_taxonomy_script = file("${moduleDir}/../scripts/dada2_assign_taxonomy.R")
-    def add_species_script = file("${moduleDir}/../scripts/dada2_add_species.R")
-    def format_taxonomy_script = file("${moduleDir}/../scripts/format_dada2_taxonomy.R")
+    def assign_taxonomy_script = file("${moduleDir}/../../scripts/dada2_assign_taxonomy.R")
+    def add_species_script = file("${moduleDir}/../../scripts/dada2_add_species.R")
+    def format_taxonomy_script = file("${moduleDir}/../../scripts/format_dada2_taxonomy.R")
 
     // Assign taxonomy using DADA2's assignTaxonomy
     dada2_tax_ch = DADA2_ASSIGN_TAXONOMY(

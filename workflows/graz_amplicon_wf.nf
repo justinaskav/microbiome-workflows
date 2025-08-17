@@ -10,7 +10,6 @@ include { WF_DENOISE_DADA2 } from '../modules/dada2/denoising_dada2_wf.nf'
 include { CLASSIFY_TAXONOMY } from '../modules/taxonomy/classify_taxonomy_wf.nf'
 include { WF_DADA2_TAXONOMY } from '../modules/dada2/dada2_assign_taxonomy_wf.nf'
 include { ALIGN_AND_TREE_QIIME2 } from '../modules/phylogeny/phylogeny_wf.nf'
-include { MAASLIN3_WORKFLOW } from '../modules/r_analysis/maaslin3_wf.nf'
 include { EVALUATE_TAXONOMY } from '../modules/silva/rescript_evaluate_taxonomy_wf.nf'
 include { COMPARE_TAXONOMY_ARTIFACTS } from '../modules/taxonomy/taxonomy_comparison_wf.nf'
 
