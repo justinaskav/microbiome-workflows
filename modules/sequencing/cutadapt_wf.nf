@@ -107,9 +107,9 @@ process EXPORT_QIIME2_SEQUENCES {
     
     # Move files to expected names
     for fq in exported/*.fastq.gz; do
-        if [[ \$fq == *"forward"* ]] || [[ \$fq == *"R1"* ]]; then
+        if [[ \$fq == *"forward"* ]] || [[ \$fq == *"_R1_"* ]]; then
             mv "\$fq" "${sampleId}_01_L001_R1_001.fastq.gz"
-        elif [[ \$fq == *"reverse"* ]] || [[ \$fq == *"R2"* ]]; then
+        elif [[ \$fq == *"reverse"* ]] || [[ \$fq == *"_R2_"* ]]; then
             mv "\$fq" "${sampleId}_01_L001_R2_001.fastq.gz"
         fi
     done

@@ -23,8 +23,11 @@ process EXTRACT_NOVOGENE_ZIP_DATA {
     # Create directory for renamed files
     mkdir -p renamed
 
-    # Loop through the files and rename them
-    for file in unzipped/*.raw_*.fastq.gz; do
+    # Loop through the files and rename them (check both .fq.gz and .fastq.gz)
+    for file in unzipped/*.raw_*.fq.gz unzipped/*.raw_*.fastq.gz; do
+        # Skip if no files match the pattern
+        [[ -f "\$file" ]] || continue
+        
         # Extract the sample name (everything before .raw_)
         sample=\$(basename "\$file" | sed 's/\\.raw_.*//g')
         
