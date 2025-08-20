@@ -35,6 +35,7 @@ workflow AMPLICON_WORKFLOW {
     primer_f                  // Forward primer (for unzipped data), null to use SampleSeq from zip
     primer_r                  // Reverse primer (for unzipped data), null to use SampleSeq from zip
     skip_polyg_trim
+    skip_dada2_taxonomy       // Skip DADA2 alternative taxonomy (optional, defaults to false)
 
     main:
     // Set up metadata channel
@@ -193,29 +194,38 @@ workflow AMPLICON_WORKFLOW {
     classified_taxa_ch = taxonomy_results_ch.classification
     classified_taxa_summary_ch = taxonomy_results_ch.classification_summary
 
-    // 4b. Alternative taxonomy classification using DADA2
-    dada2_taxonomy_results_ch = WF_DADA2_TAXONOMY(
-        filtered_rep_seqs,
-        filtered_feature_table,
-    )
+    // 4b. Alternative taxonomy classification using DADA2 (conditional)
+    def run_dada2_taxonomy = skip_dada2_taxonomy != null ? !skip_dada2_taxonomy : true
+    
+    if (run_dada2_taxonomy) {
+        dada2_taxonomy_results_ch = WF_DADA2_TAXONOMY(
+            filtered_rep_seqs,
+            filtered_feature_table,
+        )
 
-    // 4c. Evaluate taxonomic classifications using RESCRIPt
-    taxonomy_eval_ch = EVALUATE_TAXONOMY(
-        classified_taxa_ch.map { it -> [it] }  // Convert to collection for multi-taxonomy support
-            .mix(dada2_taxonomy_results_ch.qiime2_taxonomy.map { it -> [it] }),  // Add dada2 taxonomy
-        Channel.value("taxonomy_evaluation") // Output filename
-    )
+        // 4c. Evaluate taxonomic classifications using RESCRIPt
+        taxonomy_eval_ch = EVALUATE_TAXONOMY(
+            classified_taxa_ch.map { it -> [it] }  // Convert to collection for multi-taxonomy support
+                .mix(dada2_taxonomy_results_ch.qiime2_taxonomy.map { it -> [it] }),  // Add dada2 taxonomy
+            Channel.value("taxonomy_evaluation") // Output filename
+        )
 
-    // 4d. Custom Pairwise Taxonomy Comparison
-    compare_script_ch = Channel.fromPath("../scripts/compare_taxonomies.py")
+        // 4d. Custom Pairwise Taxonomy Comparison
+        compare_script_ch = Channel.fromPath("../scripts/compare_taxonomies.py")
 
-    taxonomy_comparison_ch = COMPARE_TAXONOMY_ARTIFACTS(
-        classified_taxa_ch,
-        dada2_taxonomy_results_ch.qiime2_taxonomy,
-        Channel.value("Feature-Classifier"),
-        Channel.value("DADA2"),
-        compare_script_ch
-    )
+        taxonomy_comparison_ch = COMPARE_TAXONOMY_ARTIFACTS(
+            classified_taxa_ch,
+            dada2_taxonomy_results_ch.qiime2_taxonomy,
+            Channel.value("Feature-Classifier"),
+            Channel.value("DADA2"),
+            compare_script_ch
+        )
+    } else {
+        // Skip DADA2 taxonomy - create empty channels
+        dada2_taxonomy_results_ch = [qiime2_taxonomy: Channel.empty()]
+        taxonomy_eval_ch = [taxonomy_stats: Channel.empty()]
+        taxonomy_comparison_ch = [comparison_results: Channel.empty()]
+    }
 
     // 5. Phylogenetic Analysis (Optional)
     ALIGN_AND_TREE_QIIME2(filtered_rep_seqs)
