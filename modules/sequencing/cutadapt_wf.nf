@@ -282,7 +282,7 @@ workflow WF_CUTADAPT {
             
             // Import sequences for each sample into QIIME2 format
             demux_artifacts_ch = IMPORT_SEQUENCES(read_pairs_ch)
-            
+
             // Create a channel with barcode/primer info for each sample
             barcode_primer_info_ch
                 .splitCsv(header: true, sep: '\t')
@@ -291,13 +291,45 @@ workflow WF_CUTADAPT {
                 }
                 .set { sample_info_ch }
 
-            // Join demux artifacts with barcode/primer info
-            trimming_input_ch = demux_artifacts_ch
-                .join(sample_info_ch, by: 0)
-                .map { sampleId, demuxArtifact, barcode_f, barcode_r, _primer_f, _primer_r ->
-                    [sampleId, demuxArtifact, barcode_f, barcode_r, _primer_f, _primer_r]
+            // Prepare demux artifacts for joining with sample info
+            // Create channel with both full ID (for downstream) and extracted name (for joining)
+            // Extract actual sample name from complex IDs: FDMP20H000840-1a_L1_SimB4 -> SimB4
+            demux_for_join_ch = demux_artifacts_ch
+                .map { fullSampleId, artifact ->
+                    // Extract sample name - handle prefixed patterns but preserve simple names
+                    def extractedName = fullSampleId.contains('_L1_') ? 
+                        fullSampleId.replaceAll(/.*_L1_/, '') : 
+                        fullSampleId
+                    [extractedName, fullSampleId, artifact]
                 }
-            
+
+            // Smart join with error handling
+            // Join on extracted sample name, but preserve full sample ID for downstream processes
+            joined_ch = demux_for_join_ch
+                .join(sample_info_ch, by: 0, failOnMismatch: false)
+
+            // Check if join produced results and provide helpful error if not
+            joined_count_ch = joined_ch.count()
+            joined_count_ch.subscribe { count ->
+                if (count == 0) {
+                    println "ERROR: No sample ID matches found between FASTQ files and SampleSeq data"
+                    println "This usually means:"
+                    println "1. Sample names in FASTQ files don't match those in SampleSeq metadata"
+                    println "2. SampleSeq file is missing or malformed"
+                    println "3. FASTQ files have unexpected naming pattern"
+                    throw new Exception("Sample ID join failed - check sample naming consistency")
+                } else {
+                    println "Successfully joined ${count} samples between FASTQ and SampleSeq data"
+                }
+            }
+
+            // Create trimming input channel with proper sample ID handling
+            trimming_input_ch = joined_ch
+                .map { extractedName, fullSampleId, artifact, barcode_f, barcode_r, _primer_f, _primer_r ->
+                    // Use full sample ID for downstream processes (preserves original behavior)
+                    [fullSampleId, artifact, barcode_f, barcode_r, _primer_f, _primer_r]
+                }
+
             // Run cutadapt for each sample
             trimmed_artifacts_ch = TRIM_CUTADAPT(
                 trimming_input_ch.map { it -> [it[0], it[1]] }, // sampleId, demuxArtifact

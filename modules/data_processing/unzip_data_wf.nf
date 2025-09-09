@@ -9,7 +9,7 @@ process EXTRACT_NOVOGENE_ZIP_DATA {
 
     output:
     path "renamed/*", emit: fastq_files
-    path "SampleSeq_info.xls", emit: sampleseq_file, optional: true
+    path "SampleSeq_info.xls", emit: sampleseq_file
 
     script:
     """
@@ -18,7 +18,22 @@ process EXTRACT_NOVOGENE_ZIP_DATA {
     unzip -j -o ${path_to_zip} '*.raw*.gz' -d unzipped
     
     # Also extract SampleSeq_info.xls if it exists
-    unzip -j -o ${path_to_zip} '*SampleSeq_info.xls' -d . || echo "No SampleSeq_info.xls found"
+    unzip -j -o ${path_to_zip} '*SampleSeq_info.xls' -d . || echo "No SampleSeq_info.xls found in zip"
+    
+    # If not found in zip, look for external file in the same directory as the zip
+    if [ ! -f SampleSeq_info.xls ]; then
+        # Resolve symbolic link to get the real path
+        real_zip_path=\$(readlink -f "${path_to_zip}")
+        zip_dir=\$(dirname "\$real_zip_path")
+        external_xls="\$zip_dir/SampleSeq_info.xls"
+        echo "Looking for external SampleSeq_info.xls at: \$external_xls"
+        if [ -f "\$external_xls" ]; then
+            cp "\$external_xls" .
+            echo "Using external SampleSeq_info.xls from \$zip_dir"
+        else
+            echo "No external SampleSeq_info.xls found at \$external_xls"
+        fi
+    fi
 
     # Create directory for renamed files
     mkdir -p renamed

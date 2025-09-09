@@ -36,6 +36,7 @@ workflow AMPLICON_WORKFLOW {
     primer_r                  // Reverse primer (for unzipped data), null to use SampleSeq from zip
     skip_polyg_trim
     skip_dada2_taxonomy       // Skip DADA2 alternative taxonomy (optional, defaults to false)
+    sample_prefix_to_remove   // Optional prefix to remove from sample IDs (e.g., 'FDMP20H000840-1a_L1_')
 
     main:
     // Set up metadata channel
@@ -126,6 +127,7 @@ workflow AMPLICON_WORKFLOW {
         batch_dada2_trim_left_r,
         params.dada2_n_reads_learn,
         params.dada2_n_threads,
+        sample_prefix_to_remove
     )
 
     dada2_feature_table = dada2_output_ch.feature_table

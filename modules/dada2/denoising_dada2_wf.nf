@@ -4,6 +4,7 @@ process CREATE_DADA2_MANIFEST {
 
     input:
     val read_pair_list // List of [meta, [r1_path, r2_path]]
+    val sample_prefix_to_remove // Optional prefix to remove from sample IDs
 
     output:
     path "manifest_all_samples.tsv", emit: manifest_file
@@ -13,7 +14,11 @@ process CREATE_DADA2_MANIFEST {
     // Each Path object's toString() method gives its path.
     def manifest_lines = ["sample-id\tforward-absolute-filepath\treverse-absolute-filepath"]
     read_pair_list.each { item ->
-        def sample_id = item[0].toString().split("_")[0] // Extract sample ID from meta.id
+        def full_sample_id = item[0].toString()
+        // Extract sample ID using configurable prefix removal or fallback to original logic
+        def sample_id = (sample_prefix_to_remove && sample_prefix_to_remove != '') ? 
+            full_sample_id.replaceFirst(sample_prefix_to_remove, '') : 
+            full_sample_id.split("_")[0]
         // These paths are from the fromFilePairs channel.
         // Making them explicitly absolute for the manifest is safer for QIIME2.
         def fwd_path = new File(item[1][0].toString()).getAbsolutePath()
@@ -138,11 +143,13 @@ workflow WF_DENOISE_DADA2 {
         dada2_trim_left_r
         dada2_n_reads_learn
         dada2_n_threads
+        sample_prefix_to_remove // Optional prefix to remove from sample IDs
 
     main:
         // 1. Prepare manifest from read_pairs_ch
         CREATE_DADA2_MANIFEST (
-            read_pairs_ch.collect(flat: false)
+            read_pairs_ch.collect(flat: false),
+            sample_prefix_to_remove ?: ''
         )
         dada2_manifest_ch = CREATE_DADA2_MANIFEST.out.manifest_file
 
