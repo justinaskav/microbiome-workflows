@@ -17,7 +17,7 @@ process RUN_FASTQC {
 
 // Process to run MultiQC to aggregate FastQC reports
 process RUN_MULTIQC {
-    conda 'bioconda::multiqc'
+    conda 'bioconda::multiqc=1.25.1'
 
     input:
     path fastqc_dirs // Expects a list of paths from FastQC output (specifically the directories or relevant files for multiqc)  
