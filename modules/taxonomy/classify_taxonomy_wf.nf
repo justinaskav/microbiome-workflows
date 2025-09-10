@@ -42,7 +42,7 @@ workflow CLASSIFY_TAXONOMY {
         rep_seqs_ch      // Channel of representative sequences (QZA)
         classifier_ch    // Channel of the pre-trained classifier (QZA)
         feature_table_ch // Channel of the feature table (QZA) for visualization
-        metadata_ch      // Channel of metadata (optional, for visualization)
+        metadata_file      // Channel of metadata (optional, for visualization)
 
     main:
         // 1. Classify representative sequences
@@ -57,7 +57,7 @@ workflow CLASSIFY_TAXONOMY {
             classification_results_ch,
             feature_table_ch,
             "taxonomy_barplot",
-            metadata_ch ? metadata_ch : null // Use first metadata file if available
+            metadata_file ?: null // Use first metadata file if available
         )
         taxonomy_summary_ch = taxonomy_viz_ch.barplot
 

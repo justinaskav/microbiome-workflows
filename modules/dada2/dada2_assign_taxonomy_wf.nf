@@ -3,21 +3,6 @@
 // Include visualization workflow
 include { VISUALIZE_TAXONOMY } from '../taxonomy/taxonomy_visualization_wf.nf'
 
-process DOWNLOAD_SILVA_REFERENCES {
-    tag "download-silva-refs"
-    label 'process_low'
-    
-    output:
-    path("silva_nr99_v138.2_toGenus_trainset.fa.gz"), emit: trainset_file
-    path("silva_v138.2_assignSpecies.fa.gz"), emit: species_file
-    
-    script:
-    """
-    # Download SILVA reference files for taxonomy assignment
-    curl -L -o silva_nr99_v138.2_toGenus_trainset.fa.gz "https://zenodo.org/records/14169026/files/silva_nr99_v138.2_toGenus_trainset.fa.gz?download=1"
-    curl -L -o silva_v138.2_assignSpecies.fa.gz "https://zenodo.org/records/14169026/files/silva_v138.2_assignSpecies.fa.gz?download=1"
-    """
-}
 
 process DADA2_ASSIGN_TAXONOMY {
     tag "dada2-assign-taxonomy"
@@ -126,21 +111,19 @@ process CONVERT_DADA2_TAXONOMY_TO_QIIME2 {
     """
 }
 
-
-
 workflow WF_DADA2_TAXONOMY {
     take:
     representative_seqs      // Path to ASV representative sequences
     feature_table            // Path to feature table (optional, for visualization)
+    silva_trainset          // SILVA trainset file for genus-level classification
+    silva_species           // SILVA species file for species assignment
     
     main:
-    // Download Silva reference files for taxonomy assignment
-    silva_refs_ch = DOWNLOAD_SILVA_REFERENCES()
     
     // Set default parameters if not provided in params
-    def minBoot = params.classification_confidence ?: 80 // Use the classification confidence for bootstrap threshold
-    def allowMultiple = params.dada2_add_species_allow_multiple ?: 3
-    def verbose = params.dada2_add_species_verbose ?: true
+    def minBoot = params.taxonomy.classification_confidence ?: 80 // Use the classification confidence for bootstrap threshold
+    def allowMultiple = params.taxonomy.dada2_add_species_allow_multiple ?: 3
+    def verbose = params.taxonomy.dada2_add_species_verbose ?: true
     
     // Get paths to the R scripts
     def assign_taxonomy_script = file("${moduleDir}/../../scripts/dada2_assign_taxonomy.R")
@@ -150,7 +133,7 @@ workflow WF_DADA2_TAXONOMY {
     // Assign taxonomy using DADA2's assignTaxonomy
     dada2_tax_ch = DADA2_ASSIGN_TAXONOMY(
         representative_seqs,
-        silva_refs_ch.trainset_file,
+        silva_trainset,
         minBoot,
         assign_taxonomy_script
     )
@@ -159,7 +142,7 @@ workflow WF_DADA2_TAXONOMY {
     dada2_species_ch = DADA2_ADD_SPECIES(
         dada2_tax_ch.taxonomy_rds,
         representative_seqs,
-        silva_refs_ch.species_file,
+        silva_species,
         allowMultiple,
         verbose,
         add_species_script

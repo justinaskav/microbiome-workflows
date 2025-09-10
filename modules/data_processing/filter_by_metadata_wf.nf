@@ -6,7 +6,7 @@ process FILTER_SAMPLES_BY_METADATA {
 
     input:
     path feature_table_qza  // Feature table from DADA2
-    path metadata_tsv       // Metadata file (batch1.tsv)
+    path metadata_file       // Metadata file (batch1.tsv)
 
     output:
     path("filtered_feature_table.qza"), emit: filtered_feature_table
@@ -15,7 +15,7 @@ process FILTER_SAMPLES_BY_METADATA {
     """
     qiime feature-table filter-samples \\
         --i-table ${feature_table_qza} \\
-        --m-metadata-file ${metadata_tsv} \\
+        --m-metadata-file ${metadata_file} \\
         --o-filtered-table filtered_feature_table.qza \\
         --verbose
     """
@@ -48,13 +48,14 @@ workflow WF_FILTER_BY_METADATA {
     take:
     feature_table_qza    // Feature table from DADA2
     rep_seqs_qza        // Representative sequences from DADA2
-    metadata_tsv        // Metadata file
+    metadata_file        // Metadata file
 
     main:
+
     // Filter feature table to only include samples present in metadata
     filtered_table_ch = FILTER_SAMPLES_BY_METADATA(
         feature_table_qza,
-        metadata_tsv
+        metadata_file
     )
 
     // Filter representative sequences based on filtered feature table

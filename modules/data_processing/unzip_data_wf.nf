@@ -15,15 +15,15 @@ process EXTRACT_NOVOGENE_ZIP_DATA {
     """
     # First unzip the files
     mkdir -p unzipped
-    unzip -j -o ${path_to_zip} '*.raw*.gz' -d unzipped
+    unzip -j -o ${zip_filename} '*.raw*.gz' -d unzipped
     
     # Also extract SampleSeq_info.xls if it exists
-    unzip -j -o ${path_to_zip} '*SampleSeq_info.xls' -d . || echo "No SampleSeq_info.xls found in zip"
+    unzip -j -o ${zip_filename} '*SampleSeq_info.xls' -d . || echo "No SampleSeq_info.xls found in zip"
     
     # If not found in zip, look for external file in the same directory as the zip
     if [ ! -f SampleSeq_info.xls ]; then
         # Resolve symbolic link to get the real path
-        real_zip_path=\$(readlink -f "${path_to_zip}")
+        real_zip_path=\$(readlink -f "${zip_filename}")
         zip_dir=\$(dirname "\$real_zip_path")
         external_xls="\$zip_dir/SampleSeq_info.xls"
         echo "Looking for external SampleSeq_info.xls at: \$external_xls"
@@ -62,10 +62,12 @@ process EXTRACT_NOVOGENE_ZIP_DATA {
 // Simple workflow to extract data from a single zip file
 workflow WF_UNZIP_DATA {
     take:
-    path_to_zip
+    data_dir
     zip_filename
 
     main:
+
+    path_to_zip="${projectDir}/../${data_dir}/${zip_filename}.zip"
     extract_results = EXTRACT_NOVOGENE_ZIP_DATA(path_to_zip, zip_filename)
 
     emit:

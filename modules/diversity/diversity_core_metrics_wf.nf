@@ -45,7 +45,7 @@ process DIVERSITY_CORE_METRICS_PHYLOGENETIC {
 // QIIME2 diversity core-metrics (non-phylogenetic) workflow
 // This module runs the core diversity metrics analysis without phylogeny
 
-process DIVERSITY_CORE_METRICS_NON_PHYLOGENETIC {
+process DIVERSITY_CORE_METRICS {
     tag "Core metrics on ${meta.id ?: 'data'}"
     conda params.qiime2_conda_env
 
@@ -78,7 +78,7 @@ process DIVERSITY_CORE_METRICS_NON_PHYLOGENETIC {
 }
 
 // Workflow to run core metrics and significance tests
-workflow WF_DIVERSITY_CORE_METRICS {
+workflow WF_DIVERSITY_CORE_METRICS_PHYLOGENETIC {
     take:
     feature_table_ch     // tuple val(meta), path(feature_table)
     rooted_tree_ch       // path rooted_tree
@@ -118,7 +118,7 @@ workflow WF_DIVERSITY_CORE_METRICS {
 }
 
 // Workflow to run non-phylogenetic core metrics (for ITS data)
-workflow WF_DIVERSITY_CORE_METRICS_NON_PHYLOGENETIC {
+workflow WF_DIVERSITY_CORE_METRICS {
     take:
     feature_table_ch     // tuple val(meta), path(feature_table)
     metadata_ch          // path metadata_file
@@ -127,7 +127,7 @@ workflow WF_DIVERSITY_CORE_METRICS_NON_PHYLOGENETIC {
 
     main:
     // Run core metrics (non-phylogenetic)
-    core_metrics_results = DIVERSITY_CORE_METRICS_NON_PHYLOGENETIC(
+    core_metrics_results = DIVERSITY_CORE_METRICS(
         feature_table_ch,
         metadata_ch,
         sampling_depth,
