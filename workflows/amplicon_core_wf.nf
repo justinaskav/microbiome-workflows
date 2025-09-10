@@ -24,38 +24,43 @@ workflow AMPLICON_CORE {
     read_pairs_ch // Standardized read pairs channel
     metadata_path // Metadata 
     barcode_primer_info_ch // Barcode/primer info (may be empty)
-    cutadapt_options // Unified cutadapt configuration
+    primers
+    trimming_options // Unified cutadapt configuration
     dada2_options // Unified DADA2 configuration
     decontam_options // Unified decontamination configuration
+    taxonomy_options // Unified taxonomy configuration
     database_ch_list // Classifier and reference databases (SILVA or UNITE)
     other_options // Other options (e.g., sample prefix to remove, diversity settings)
 
-    main:
-
-    cutadapt_config = [
-        enabled: cutadapt_options.enabled ?: true,
-        use_sampleseq: cutadapt_options.use_sampleseq ?: false,
-        primer_f: cutadapt_options.primer_f ?: params.primer_f,
-        primer_r: cutadapt_options.primer_r ?: params.primer_r,
-        skip_polyg_trim: cutadapt_options.skip_polyg_trim ?: false,
-    ]
+    main: 
 
     dada2_config = [
-        trunc_len_f: dada2_options.trunc_len_f ?: params.dada2.trunc_len_f,
-        trunc_len_r: dada2_options.trunc_len_r ?: params.dada2.trunc_len_r,
-        trim_left_f: dada2_options.trim_left_f ?: params.dada2.trim_left_f,
-        trim_left_r: dada2_options.trim_left_r ?: params.dada2.trim_left_r,
-        n_reads_learn: dada2_options.n_reads_learn ?: params.dada2.n_reads_learn,
-        n_threads: dada2_options.n_threads ?: params.dada2.n_threads,
-        sample_prefix_to_remove: dada2_options.sample_prefix_to_remove ?: params.dada2.sample_prefix_to_remove,
+        trunc_len_f: dada2_options.trunc_len_f,
+        trunc_len_r: dada2_options.trunc_len_r,
+        trim_left_f: dada2_options.trim_left_f,
+        trim_left_r: dada2_options.trim_left_r,
+        n_reads_learn: dada2_options.n_reads_learn ?: params.dada2?.n_reads_learn ?: 1000000,
+        n_threads: dada2_options.n_threads ?: params.dada2?.n_threads ?: 8,
+        sample_prefix_to_remove: dada2_options.sample_prefix_to_remove ?: params.dada2?.sample_prefix_to_remove,
     ]
 
     decontam_config = [
-        method: decontam_options.method ?: params.decontam.method,
-        freq_concentration_column: decontam_options.freq_concentration_column ?: params.decontam.freq_concentration_column,
-        prev_control_column: decontam_options.prev_control_column ?: params.decontam.prev_control_column,
-        prev_control_indicator: decontam_options.prev_control_indicator ?: params.decontam.prev_control_indicator,
-        threshold: decontam_options.threshold ?: params.decontam.threshold,
+        method: decontam_options?.method ?: params.decontam?.method ?: "none",
+        freq_concentration_column: decontam_options?.freq_concentration_column ?: params.decontam?.freq_concentration_column ?: null,
+        prev_control_column: decontam_options?.prev_control_column ?: params.decontam?.prev_control_column ?: null,
+        prev_control_indicator: decontam_options?.prev_control_indicator ?: params.decontam?.prev_control_indicator ?: null,
+        threshold: decontam_options?.threshold ?: params.decontam?.threshold ?: 0.1,
+    ]
+
+    taxonomy_config = [
+        enable_dada2_taxonomy: taxonomy_options?.enable_dada2_taxonomy ?: params.taxonomy?.enable_dada2_taxonomy ?: false,
+        enable_comparison: taxonomy_options?.enable_comparison ?: params.taxonomy?.enable_comparison ?: false,
+    ]
+
+    trimming_config = [
+        enabled: trimming_options.enabled ?: true,
+        use_sampleseq: trimming_options.use_sampleseq ?: false,
+        skip_polyg_trim: trimming_options.skip_polyg_trim ?: false,
     ]
 
     // Run regular quality control on original reads for comparison
@@ -64,10 +69,8 @@ workflow AMPLICON_CORE {
     trimming_results = WF_CUTADAPT(
         read_pairs_ch,
         barcode_primer_info_ch,
-        cutadapt_config.enabled,
-        cutadapt_config.primer_f,
-        cutadapt_config.primer_r,
-        cutadapt_config.skip_polyg_trim,
+        trimming_config,
+        primers
     )
 
     // Process exported fastqs for QC after cutadapt
@@ -161,10 +164,7 @@ workflow AMPLICON_CORE {
     classified_taxa_ch = taxonomy_results_ch.classification
     classified_taxa_summary_ch = taxonomy_results_ch.classification_summary
 
-    enable_dada2_taxonomy = params?.taxonomy?.enable_dada2_taxonomy ?: false
-    enable_comparison = params?.taxonomy?.enable_comparison ?: false
-
-    if (enable_dada2_taxonomy) {
+    if (taxonomy_config.enable_dada2_taxonomy) {
         dada2_taxonomy_results_ch = WF_DADA2_TAXONOMY(
             filtered_rep_seqs,
             filtered_feature_table,
@@ -172,7 +172,7 @@ workflow AMPLICON_CORE {
             database_ch_list.refs.species,
         )
 
-        if (enable_comparison) {
+        if (taxonomy_config.enable_comparison) {
 
             // Evaluate taxonomic classifications using RESCRIPt
             taxonomy_eval_ch = EVALUATE_REFERENCE_TAXONOMY(

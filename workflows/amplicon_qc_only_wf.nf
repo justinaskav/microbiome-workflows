@@ -14,7 +14,6 @@ workflow AMPLICON_QC_ONLY {
     input_options
     primers
     trimming_options
-    metadata_path
 
     main:
 
@@ -27,20 +26,17 @@ workflow AMPLICON_QC_ONLY {
 
     read_pairs_ch = input_processing_results.read_pairs_ch
     barcode_primer_info_ch = input_processing_results.barcode_primer_info_ch
-    cutadapt_options = input_processing_results.cutadapt_options
 
     // Run quality control on original reads
     WF_QUALITY_CONTROL(read_pairs_ch)
 
     // Conditionally run cutadapt if enabled
-    if (cutadapt_options.enabled) {
+    if (trimming_options.enabled) {
         trimming_results = WF_CUTADAPT(
             read_pairs_ch,
             barcode_primer_info_ch,
-            cutadapt_options.enabled,
-            cutadapt_options.primer_f,
-            cutadapt_options.primer_r,
-            cutadapt_options.skip_polyg_trim,
+            trimming_options,
+            primers
         )
 
         // Process exported fastqs for QC after cutadapt
@@ -52,7 +48,7 @@ workflow AMPLICON_QC_ONLY {
 
         // Run QC on the exported fastqs after cutadapt
         WF_QUALITY_CONTROL_AFTER_CUTADAPT(exported_fastqs_pairs_ch)
-        
+
         fastqc_results_after_cutadapt = WF_QUALITY_CONTROL_AFTER_CUTADAPT.out.fastqc_results
         multiqc_report_after_cutadapt = WF_QUALITY_CONTROL_AFTER_CUTADAPT.out.multiqc_report
     } else {
@@ -64,6 +60,6 @@ workflow AMPLICON_QC_ONLY {
     emit:
     fastqc_results = WF_QUALITY_CONTROL.out.fastqc_results
     multiqc_report = WF_QUALITY_CONTROL.out.multiqc_report
-    fastqc_results_after_cutadapt = fastqc_results_after_cutadapt
-    multiqc_report_after_cutadapt = multiqc_report_after_cutadapt
+    // fastqc_results_after_cutadapt = fastqc_results_after_cutadapt
+    // multiqc_report_after_cutadapt = multiqc_report_after_cutadapt
 }

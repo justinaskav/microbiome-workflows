@@ -1,7 +1,7 @@
 // Generic cutadapt workflow for trimming sequence reads
 // Works with any paired-end sequencing data
 
-process IMPORT_SEQUENCES {
+process IMPORT_READS_TO_QZA {
     tag "Import ${sampleId}"
 
     conda params.qiime2_conda_env
@@ -36,12 +36,7 @@ process TRIM_CUTADAPT {
     conda params.qiime2_conda_env
 
     input:
-    val sampleId
-    path demuxArtifact
-    val barcode_f
-    val barcode_r
-    val primer_f
-    val primer_r
+    tuple val(sampleId), path(demuxArtifact), val(barcode_f), val(barcode_r), val(primer_f), val(primer_r)
 
     output:
     tuple val(sampleId), path("${sampleId}_trimmed.qza"), emit: trimmed_artifact
@@ -232,147 +227,100 @@ process TRIM_MERGED_CUTADAPT {
 workflow WF_CUTADAPT {
     take:
     read_pairs_ch // Channel with sample ID and read pairs
-    barcode_primer_info_ch // Channel with barcode/primer info (optional)
-    use_cutadapt // Boolean to enable cutadapt
-    primer_f // Forward primer (for direct specification), null to use barcode_primer_info
-    primer_r // Reverse primer (for direct specification), null to use barcode_primer_info
-    skip_polyg_trim // Boolean to skip polyG trimming
+    barcode_primer_info_ch // Channel with barcode/primer info
+    trimming_config // Trimming options (skip_polyg_trim, primer_f, primer_r)
+    primers
 
     main:
-    if (use_cutadapt) {
 
-        if (primer_f != null && primer_r != null) {
-            // OPTIMIZED PATH: Direct import → cutadapt → DADA2 for same primers
-            // This is used when primers are explicitly provided
-            staged_fastqs_ch = STAGE_FASTQS_FOR_IMPORT(read_pairs_ch)
-                .map { r1, r2 ->
-                    [r1, r2]
-                }
-                .flatten()
-                .collect()
+    if (trimming_config.use_sampleseq) {
+        // TRADITIONAL PATH: Individual sample processing for barcoded data
+        // This is used when barcode_primer_info is provided
 
-            // Import all sequences at once
-            import_results = IMPORT_FASTQS_TO_QIIME2(staged_fastqs_ch)
+        // Import sequences for each sample into QIIME2 format
+        demux_artifacts_ch = IMPORT_READS_TO_QZA(read_pairs_ch)
 
-            // Apply cutadapt with primers to merged sequences
-            trim_results = TRIM_MERGED_CUTADAPT(
-                import_results.sequences,
-                primer_f,
-                primer_r,
-            )
-
-            exported_fastqs_ch = EXPORT_QIIME2_ARTIFACT(
-                trim_results.trimmed_sequences
-            ).flatMap { list_of_files ->
-                list_of_files.collect { file ->
-                    def file_name = file.getName()
-                    def sample_id = file_name.split('_')[0]
-                    // Assuming file names are like sample_01_L001_R1_001.fastq.gz
-                    [sample_id, file]
-                }
-            }.groupTuple().map { sample_id, files ->
-                [sample_id, files[0], files[1]]
+        // Create a channel with barcode/primer info for each sample
+        barcode_primer_info_ch
+            .splitCsv(header: true, sep: '\t')
+            .map { row ->
+                [row.SampleID, row.Barcode_F, row.Barcode_R, row.Primer_F, row.Primer_R]
             }
+            .set { sample_info_ch }
 
-            trimmed_sequences = trim_results.trimmed_sequences
-            trimmed_sequences_summary = trim_results.trimmed_sequences_summary
-            individual_trimmed = Channel.empty()
+        // Prepare demux artifacts for joining with sample info
+        // Create channel with both full ID (for downstream) and extracted name (for joining)
+        // Extract actual sample name from complex IDs: FDMP20H000840-1a_L1_SimB4 -> SimB4
+        demux_for_join_ch = demux_artifacts_ch.map { fullSampleId, artifact ->
+            // Extract sample name - handle prefixed patterns but preserve simple names
+            def extractedName = fullSampleId.contains('_L1_')
+                ? fullSampleId.replaceAll(/.*_L1_/, '')
+                : fullSampleId
+            [extractedName, fullSampleId, artifact]
         }
-        else {
-            // TRADITIONAL PATH: Individual sample processing for barcoded data
-            // This is used when barcode_primer_info is provided
 
-            // Import sequences for each sample into QIIME2 format
-            demux_artifacts_ch = IMPORT_SEQUENCES(read_pairs_ch)
+        // Smart join with error handling
+        // Join on extracted sample name, but preserve full sample ID for downstream processes
+        joined_ch = demux_for_join_ch.join(sample_info_ch, by: 0, failOnMismatch: false)
 
-            // Create a channel with barcode/primer info for each sample
-            barcode_primer_info_ch
-                .splitCsv(header: true, sep: '\t')
-                .map { row ->
-                    [row.SampleID, row.Barcode_F, row.Barcode_R, row.Primer_F, row.Primer_R]
-                }
-                .set { sample_info_ch }
-
-            // Prepare demux artifacts for joining with sample info
-            // Create channel with both full ID (for downstream) and extracted name (for joining)
-            // Extract actual sample name from complex IDs: FDMP20H000840-1a_L1_SimB4 -> SimB4
-            demux_for_join_ch = demux_artifacts_ch.map { fullSampleId, artifact ->
-                // Extract sample name - handle prefixed patterns but preserve simple names
-                def extractedName = fullSampleId.contains('_L1_')
-                    ? fullSampleId.replaceAll(/.*_L1_/, '')
-                    : fullSampleId
-                [extractedName, fullSampleId, artifact]
-            }
-
-            // Smart join with error handling
-            // Join on extracted sample name, but preserve full sample ID for downstream processes
-            joined_ch = demux_for_join_ch.join(sample_info_ch, by: 0, failOnMismatch: false)
-
-            // Check if join produced results and provide helpful error if not
-            joined_count_ch = joined_ch.count()
-            joined_count_ch.subscribe { count ->
-                if (count == 0) {
-                    println("ERROR: No sample ID matches found between FASTQ files and SampleSeq data")
-                    println("This usually means:")
-                    println("1. Sample names in FASTQ files don't match those in SampleSeq metadata")
-                    println("2. SampleSeq file is missing or malformed")
-                    println("3. FASTQ files have unexpected naming pattern")
-                    throw new Exception("Sample ID join failed - check sample naming consistency")
-                }
-                else {
-                    println("Successfully joined ${count} samples between FASTQ and SampleSeq data")
-                }
-            }
-
-            // Create trimming input channel with proper sample ID handling
-            trimming_input_ch = joined_ch.map { extractedName, fullSampleId, artifact, barcode_f, barcode_r, _primer_f, _primer_r ->
-                // Use full sample ID for downstream processes (preserves original behavior)
-                [
-                    sampleId: fullSampleId,
-                    demuxArtifact: artifact,
-                    barcode_f: barcode_f,
-                    barcode_r: barcode_r,
-                    primer_f: _primer_f,
-                    primer_r: _primer_r,
-                ]
-            }
-
-            trimming_input_ch.view()
-
-            // Run cutadapt for each sample
-            trimmed_artifacts_ch = TRIM_CUTADAPT(
-                trimming_input_ch.sampleId,
-                trimming_input_ch.demuxArtifact,
-                trimming_input_ch.barcode_f,
-                trimming_input_ch.barcode_r,
-                trimming_input_ch.primer_f,
-                trimming_input_ch.primer_r,
-            )
-
-            if (skip_polyg_trim) {
-                // If polyG trimming is skipped, just use the trimmed artifacts as they are
-                polyg_trimmed_artifacts_ch = trimmed_artifacts_ch
+        // Check if join produced results and provide helpful error if not
+        joined_count_ch = joined_ch.count()
+        joined_count_ch.subscribe { count ->
+            if (count == 0) {
+                println("ERROR: No sample ID matches found between FASTQ files and SampleSeq data")
+                println("This usually means:")
+                println("1. Sample names in FASTQ files don't match those in SampleSeq metadata")
+                println("2. SampleSeq file is missing or malformed")
+                println("3. FASTQ files have unexpected naming pattern")
+                throw new Exception("Sample ID join failed - check sample naming consistency")
             }
             else {
-                // Run polyG trimming on the already trimmed sequences
-                polyg_trimmed_artifacts_ch = TRIM_POLYG_SEQUENCES(trimmed_artifacts_ch)
+                println("Successfully joined ${count} samples between FASTQ and SampleSeq data")
             }
-
-            // Export polyA-trimmed sequences to fastq
-            exported_fastqs_ch = EXPORT_QIIME2_SEQUENCES(polyg_trimmed_artifacts_ch)
-
-            // Merge all polyG-trimmed sequences into a single artifact
-            merged_results_ch = IMPORT_FASTQS_TO_QIIME2(
-                exported_fastqs_ch.map { sample_id, r1, r2 -> [r1, r2] }.flatten().collect()
-            )
-
-            trimmed_sequences = merged_results_ch.sequences
-            trimmed_sequences_summary = merged_results_ch.sequences_summary
-            individual_trimmed = polyg_trimmed_artifacts_ch[1]
         }
+
+        // Create trimming input channel with proper sample ID handling
+        trimming_input_ch = joined_ch.map { extractedName, fullSampleId, artifact, barcode_f, barcode_r, _primer_f, _primer_r ->
+            // Use full sample ID for downstream processes (preserves original behavior)
+            [
+                sampleId: fullSampleId,
+                demuxArtifact: artifact,
+                barcode_f: barcode_f,
+                barcode_r: barcode_r,
+                primer_f: _primer_f,
+                primer_r: _primer_r,
+            ]
+        }
+
+        // Run cutadapt for each sample
+        trimmed_artifacts_ch = TRIM_CUTADAPT(
+            trimming_input_ch
+        )
+
+        if (trimming_config.skip_polyg_trim) {
+            // If polyG trimming is skipped, just use the trimmed artifacts as they are
+            polyg_trimmed_artifacts_ch = trimmed_artifacts_ch
+        }
+        else {
+            // Run polyG trimming on the already trimmed sequences
+            polyg_trimmed_artifacts_ch = TRIM_POLYG_SEQUENCES(trimmed_artifacts_ch)
+        }
+
+        // Export polyA-trimmed sequences to fastq
+        exported_fastqs_ch = EXPORT_QIIME2_SEQUENCES(polyg_trimmed_artifacts_ch)
+
+        // Merge all polyG-trimmed sequences into a single artifact
+        merged_results_ch = IMPORT_FASTQS_TO_QIIME2(
+            exported_fastqs_ch.map { sample_id, r1, r2 -> [r1, r2] }.flatten().collect()
+        )
+
+        trimmed_sequences = merged_results_ch.sequences
+        trimmed_sequences_summary = merged_results_ch.sequences_summary
+        individual_trimmed = polyg_trimmed_artifacts_ch[1]
     }
-    else {
-        // If cutadapt is disabled, just import the original files
+    else if (primers.forward != null && primers.reverse != null) {
+        // OPTIMIZED PATH: Direct import → cutadapt → DADA2 for same primers
+        // This is used when primers are explicitly provided
         staged_fastqs_ch = STAGE_FASTQS_FOR_IMPORT(read_pairs_ch)
             .map { r1, r2 ->
                 [r1, r2]
@@ -380,12 +328,32 @@ workflow WF_CUTADAPT {
             .flatten()
             .collect()
 
+        // Import all sequences at once
         import_results = IMPORT_FASTQS_TO_QIIME2(staged_fastqs_ch)
 
-        trimmed_sequences = import_results.sequences
-        trimmed_sequences_summary = import_results.sequences_summary
+        // Apply cutadapt with primers to merged sequences
+        trim_results = TRIM_MERGED_CUTADAPT(
+            import_results.sequences,
+            primers.forward,
+            primers.reverse,
+        )
+
+        exported_fastqs_ch = EXPORT_QIIME2_ARTIFACT(
+            trim_results.trimmed_sequences
+        ).flatMap { list_of_files ->
+            list_of_files.collect { file ->
+                def file_name = file.getName()
+                def sample_id = file_name.split('_')[0]
+                // Assuming file names are like sample_01_L001_R1_001.fastq.gz
+                [sample_id, file]
+            }
+        }.groupTuple().map { sample_id, files ->
+            [sample_id, files[0], files[1]]
+        }
+
+        trimmed_sequences = trim_results.trimmed_sequences
+        trimmed_sequences_summary = trim_results.trimmed_sequences_summary
         individual_trimmed = Channel.empty()
-        exported_fastqs_ch = Channel.empty()
     }
 
     emit:

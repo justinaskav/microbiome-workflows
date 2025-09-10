@@ -43,17 +43,7 @@ workflow WF_INPUT_PROCESSING {
         )
     }
 
-    // Combine cutadapt options with primer information from batch config
-    cutadapt_options = [
-        enabled: trimming_options.enabled ?: true,
-        use_sampleseq: trimming_options.use_sampleseq ?: false,
-        primer_f: primers.forward,
-        primer_r: primers.reverse,
-        skip_polyg_trim: trimming_options.skip_polyg_trim ?: false,
-    ]
-
     emit:
     read_pairs_ch = input_results.read_pairs_ch
     barcode_primer_info_ch = input_results.barcode_primer_info_ch
-    cutadapt_options = cutadapt_options
 }

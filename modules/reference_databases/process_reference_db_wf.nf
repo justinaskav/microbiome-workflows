@@ -132,8 +132,8 @@ process DEREPLICATE_DATABASE {
     """
 }
 
-process EXTRACT_AMPLICON_REGION {
-    tag "$meta.id - Extract amplicon"
+process EXTRACT_READS {
+    tag "$meta.id - Extract reads"
     label 'process_medium'
     cpus 4
 
@@ -145,10 +145,7 @@ process EXTRACT_AMPLICON_REGION {
     val r_primer
 
     output:
-    tuple val(meta), path("${meta.id}-amplicon.qza"), emit: amplicon_sequences
-
-    when:
-    f_primer && r_primer
+    tuple val(meta), path("${meta.id}-extracted.qza"), emit: extracted_sequences
 
     script:
     """
@@ -158,37 +155,7 @@ process EXTRACT_AMPLICON_REGION {
         --p-r-primer '${r_primer}' \
         --p-n-jobs ${task.cpus} \
         --p-read-orientation 'forward' \
-        --o-reads "${meta.id}-amplicon.qza" \
-        --verbose
-    """
-}
-
-process EXTRACT_ITS_REGION {
-    tag "$meta.id - Extract ITS"
-    label 'process_medium'
-    cpus 4
-
-    conda "${params.qiime2_conda_env}"
-
-    input:
-    tuple val(meta), path(sequences_qza)
-    val its_region
-
-    output:
-    tuple val(meta), path("${meta.id}-its-extracted.qza"), emit: its_sequences
-
-    when:
-    its_region && its_region != 'all'
-
-    script:
-    """
-    qiime feature-classifier extract-reads \
-        --i-sequences "${sequences_qza}" \
-        --p-f-primer 'CTTGGTCATTTAGAGGAAGTAA' \
-        --p-r-primer 'GCTGCGTTCTTCATCGATGC' \
-        --p-n-jobs ${task.cpus} \
-        --p-read-orientation 'forward' \
-        --o-reads "${meta.id}-its-extracted.qza" \
+        --o-reads "${meta.id}-extracted.qza" \
         --verbose
     """
 }
@@ -245,15 +212,6 @@ workflow WF_PROCESS_REF_DB {
             ).edited_taxonomy
             current_tax_ch = tax_edit_ch
         }
-
-        // Extract ITS region if specified
-        if (processing_config.its_region && processing_config.its_region != 'all') {
-            its_seqs_ch = EXTRACT_ITS_REGION(
-                current_seqs_ch,
-                processing_config.its_region
-            ).its_sequences
-            current_seqs_ch = its_seqs_ch
-        }
     }
 
     // Common processing steps
@@ -266,16 +224,16 @@ workflow WF_PROCESS_REF_DB {
         processing_config.derep_mode ?: 'uniq'
     ).dereplicated_data
 
-    // Extract amplicon region if primers provided (common for both databases)
+    // Extract reads if primers provided (common for both databases)
     if (processing_config.f_primer && processing_config.r_primer) {
-        amplicon_seqs_ch = EXTRACT_AMPLICON_REGION(
+        extracted_seqs_ch = EXTRACT_READS(
             dereplicated_ch.map { _meta, seqs, tax -> tuple(_meta, seqs) },
             processing_config.f_primer,
             processing_config.r_primer
-        ).amplicon_sequences
+        ).extracted_sequences
 
         // Rejoin with taxonomy
-        final_seqs_ch = amplicon_seqs_ch
+        final_seqs_ch = extracted_seqs_ch
         final_tax_ch = dereplicated_ch.map { _meta, seqs, tax -> tuple(_meta, tax) }
     } else {
         // Use full-length dereplicated sequences
