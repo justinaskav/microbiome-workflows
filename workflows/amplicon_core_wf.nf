@@ -15,6 +15,7 @@ include { DOWNLOAD_REFERENCE_DATABASE } from '../modules/reference_databases/dow
 include { ALIGN_AND_TREE_QIIME2 } from '../modules/phylogeny/phylogeny_wf.nf'
 include { EVALUATE_REFERENCE_TAXONOMY } from '../modules/reference_databases/evaluate_taxonomy_wf.nf'
 include { COMPARE_TAXONOMY_ARTIFACTS } from '../modules/taxonomy/taxonomy_comparison_wf.nf'
+include { WF_EVALUATE_GRAM_STAINING } from '../modules/taxonomy/evaluate_gram_staining_wf.nf'
 include { WF_DIVERSITY_CORE_METRICS ; WF_DIVERSITY_CORE_METRICS_PHYLOGENETIC } from '../modules/diversity/diversity_core_metrics_wf.nf'
 
 // Core amplicon processing workflow with standardized inputs
@@ -56,12 +57,6 @@ workflow AMPLICON_CORE {
         prev_control_indicator: decontam_options.prev_control_indicator ?: params.decontam.prev_control_indicator,
         threshold: decontam_options.threshold ?: params.decontam.threshold,
     ]
-
-    // taxonomy_config = [
-    //     enable_dada2_taxonomy: params.taxonomy.enable_dada2_taxonomy,
-    //     classification_confidence: params.taxonomy.classification_confidence,
-    //     enable_comparison: params.taxonomy.enable_comparison,
-    // ]
 
     // Run regular quality control on original reads for comparison
     WF_QUALITY_CONTROL(read_pairs_ch)
@@ -166,8 +161,6 @@ workflow AMPLICON_CORE {
     classified_taxa_ch = taxonomy_results_ch.classification
     classified_taxa_summary_ch = taxonomy_results_ch.classification_summary
 
-    // Alternative taxonomy classification using DADA2 (conditional)
-    // Extract taxonomy settings from other_options
     enable_dada2_taxonomy = params?.taxonomy?.enable_dada2_taxonomy ?: false
     enable_comparison = params?.taxonomy?.enable_comparison ?: false
 
@@ -180,24 +173,20 @@ workflow AMPLICON_CORE {
         )
 
         if (enable_comparison) {
+
             // Evaluate taxonomic classifications using RESCRIPt
             taxonomy_eval_ch = EVALUATE_REFERENCE_TAXONOMY(
                 classified_taxa_ch.mix(dada2_taxonomy_results_ch.qiime2_taxonomy),
                 "taxonomy_evaluation",
                 "",
             ).evaluation
-            //
-            // // Custom Pairwise Taxonomy Comparison
-            compare_script_ch = Channel.fromPath("../scripts/compare_taxonomies.py")
-            //
+
             taxonomy_comparison_ch_results = COMPARE_TAXONOMY_ARTIFACTS(
                 classified_taxa_ch,
                 dada2_taxonomy_results_ch.qiime2_taxonomy,
                 Channel.value("Feature-Classifier"),
                 Channel.value("DADA2"),
-                compare_script_ch,
             )
-            //
 
             dada2_taxonomy_ch = dada2_taxonomy_results_ch.qiime2_taxonomy
             taxonomy_evaluation_ch = taxonomy_eval_ch
@@ -215,6 +204,13 @@ workflow AMPLICON_CORE {
         taxonomy_evaluation_ch = Channel.empty()
         taxonomy_comparison_ch = Channel.empty()
     }
+
+    // Gram Staining Evaluation (Optional)
+    WF_EVALUATE_GRAM_STAINING(
+        classified_taxa_ch,
+        filtered_feature_table,
+        metadata_path,
+    )
 
     // Phylogenetic Analysis (Optional)
     ALIGN_AND_TREE_QIIME2(filtered_rep_seqs)
@@ -263,6 +259,7 @@ workflow AMPLICON_CORE {
     dada2_taxonomy = dada2_taxonomy_ch
     taxonomy_evaluation = taxonomy_evaluation_ch
     taxonomy_comparison = taxonomy_comparison_ch
+    gram_staining_evaluation = WF_EVALUATE_GRAM_STAINING.out.gram_staining_eval_results
     diversity_results = diversity_results_ch
     feature_table = filtered_feature_table
     rep_seqs = filtered_rep_seqs

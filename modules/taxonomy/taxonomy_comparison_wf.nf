@@ -13,7 +13,6 @@ process COMPARE_TAXONOMIES {
     path taxonomy2       // Second taxonomy artifact (.qza)
     val taxonomy1_name   // Name for first taxonomy
     val taxonomy2_name   // Name for second taxonomy
-    path compare_script  // Python script for comparison
 
     output:
     path "comparison_results.qzv", emit: comparison_results
@@ -38,7 +37,6 @@ workflow COMPARE_TAXONOMY_ARTIFACTS {
     taxonomy2_ch     // Channel with second taxonomy artifact
     name1_ch         // Channel with name for first taxonomy
     name2_ch         // Channel with name for second taxonomy
-    script_ch        // Channel with comparison script
     
     main:
     // Execute comparison
@@ -47,7 +45,6 @@ workflow COMPARE_TAXONOMY_ARTIFACTS {
         taxonomy2_ch,
         name1_ch,
         name2_ch,
-        script_ch
     )
     
     emit:

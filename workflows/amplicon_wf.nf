@@ -93,6 +93,7 @@ workflow AMPLICON_WORKFLOW {
     dada2_taxonomy = core_results.dada2_taxonomy
     taxonomy_evaluation = core_results.taxonomy_evaluation
     taxonomy_comparison = core_results.taxonomy_comparison
+    gram_staining_evaluation = core_results.gram_staining_evaluation
     diversity_results = core_results.diversity_results
     feature_table = core_results.feature_table
     rep_seqs = core_results.rep_seqs
