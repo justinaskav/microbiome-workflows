@@ -24,13 +24,16 @@ workflow AMPLICON_WORKFLOW {
     // Full analysis pipeline (default)
     input_processing_results = WF_INPUT_PROCESSING(
         input_options,
-        primers,
-        trimming_options
+    )
+
+    // Use dynamic metadata if available, otherwise use static path
+    metadata_to_use = input_processing_results.metadata_file.ifEmpty(
+        metadata_path ? file(metadata_path) : Channel.empty()
     )
 
     workflow_results = AMPLICON_CORE(
         input_processing_results.read_pairs_ch,
-        metadata_path,
+        metadata_to_use,
         input_processing_results.barcode_primer_info_ch,
         primers,
         trimming_options,

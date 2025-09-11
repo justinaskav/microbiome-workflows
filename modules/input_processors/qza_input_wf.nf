@@ -6,7 +6,7 @@ nextflow.enable.dsl = 2
 // Process to export QZA metadata to TSV format
 process EXPORT_QZA_METADATA {
     tag "export_qza_metadata"
-    conda "${params.qiime2_conda_env ?: 'qiime2-amplicon'}"
+    conda "${params.qiime2_conda_env ?: 'qiime2-amplicon-2025.7'}"
 
     input:
     path metadata_qza
@@ -47,7 +47,7 @@ process EXPORT_QZA_METADATA {
 // Process to export QZA paired reads to FASTQ format
 process EXPORT_QZA_PAIRED_READS {
     tag "export_qza_paired_reads"
-    conda "${params.qiime2_conda_env ?: 'qiime2-amplicon'}"
+    conda "${params.qiime2_conda_env ?: 'qiime2-amplicon-2025.7'}"
 
     input:
     path paired_reads_qza
@@ -112,28 +112,40 @@ workflow WF_QZA_INPUT {
     // Export QZA paired reads to FASTQ format
     fastq_results = EXPORT_QZA_PAIRED_READS(paired_reads_qza)
     
-    // Organize FASTQ files
-    organized_results = ORGANIZE_FASTQ_PAIRS(fastq_results.fastq_files.collect())
+    // Organize FASTQ files  
+    organized_results = ORGANIZE_FASTQ_PAIRS(fastq_results.fastq_files)
     
     // Process FASTQ files into read pairs
     // Extract sample names from FASTQ filenames and group by sample
     read_pairs_ch = organized_results.organized_files
         .flatMap { tuple ->
             def organized_files = tuple[1]
-            return organized_files.collect { file ->
+            return organized_files.findAll { it.name.endsWith('.fastq.gz') }.collect { file ->
                 def file_name = file.getName()
-                // Extract sample name from various FASTQ naming patterns
-                def sample_name = file_name.replaceAll(/(_L001)?_R[12](_001)?\\.fastq\\.gz$/, "")
-                    .replaceAll(/_[0-9]+_[0-9]+_forward|_[0-9]+_[0-9]+_reverse/, "")
-                    .replaceAll(/_forward|_reverse/, "")
-                return tuple(sample_name, file)
+                // Extract sample name for QIIME2 export naming (e.g., DRR258978_00_L001_R1_001.fastq.gz -> DRR258978_00)
+                def sample_name = file_name.split('_L001_')[0]
+                return [sample_name, file]
             }
         }
         .groupTuple()
+        .filter { sample_name, files -> 
+            def keep = files.size() == 2  // Only keep properly paired samples
+            if (!keep) {
+                log.warn "Skipping sample ${sample_name}: found ${files.size()} files instead of 2"
+            }
+            return keep
+        }
         .map { sample_name, files ->
             // Sort files to ensure R1 comes before R2
-            def sorted_files = files.sort { it.getName() }
-            return tuple(sample_name, sorted_files)
+            def sorted_files = files.sort { 
+                def name = it.getName()
+                if (name.contains('_R1_') || name.contains('_forward')) return 0
+                else if (name.contains('_R2_') || name.contains('_reverse')) return 1
+                else return name
+            }
+            // Take only first 2 files if more than 2
+            def final_files = sorted_files.size() > 2 ? sorted_files.take(2) : sorted_files
+            return tuple(sample_name, final_files)
         }
 
     // Create empty sampleseq file channel since no SampleSeq parsing needed for QZA input

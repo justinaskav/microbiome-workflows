@@ -1,6 +1,5 @@
 process EVALUATE_GRAM_STAINING {
     conda "${params.qiime2_conda_env}" // Uses the QIIME2 environment
-    cache false
 
     input:
     path taxonomy

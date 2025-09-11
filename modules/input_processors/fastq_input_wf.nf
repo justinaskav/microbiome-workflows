@@ -29,5 +29,6 @@ workflow WF_FASTQ_INPUT {
     read_pairs_ch = read_pairs_ch
     barcode_primer_info_ch = barcode_primer_info_ch
     sampleseq_file_ch = sampleseq_file_ch
+    metadata_tsv = Channel.empty()  // No metadata for FASTQ input
     input_type = Channel.value("fastq")
 }

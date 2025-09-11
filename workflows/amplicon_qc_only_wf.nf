@@ -17,11 +17,11 @@ workflow AMPLICON_QC_ONLY {
 
     main:
 
+    println trimming_options
+
     // Process inputs using the shared input processing workflow
     input_processing_results = WF_INPUT_PROCESSING(
         input_options,
-        primers,
-        trimming_options,
     )
 
     read_pairs_ch = input_processing_results.read_pairs_ch
@@ -31,7 +31,7 @@ workflow AMPLICON_QC_ONLY {
     WF_QUALITY_CONTROL(read_pairs_ch)
 
     // Conditionally run cutadapt if enabled
-    if (trimming_options.enabled) {
+    if (trimming_options?.enabled) {
         trimming_results = WF_CUTADAPT(
             read_pairs_ch,
             barcode_primer_info_ch,
@@ -60,6 +60,6 @@ workflow AMPLICON_QC_ONLY {
     emit:
     fastqc_results = WF_QUALITY_CONTROL.out.fastqc_results
     multiqc_report = WF_QUALITY_CONTROL.out.multiqc_report
-    // fastqc_results_after_cutadapt = fastqc_results_after_cutadapt
-    // multiqc_report_after_cutadapt = multiqc_report_after_cutadapt
+    fastqc_results_after_cutadapt = fastqc_results_after_cutadapt
+    multiqc_report_after_cutadapt = multiqc_report_after_cutadapt
 }

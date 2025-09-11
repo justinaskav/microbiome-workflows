@@ -22,7 +22,7 @@ include { WF_DIVERSITY_CORE_METRICS ; WF_DIVERSITY_CORE_METRICS_PHYLOGENETIC } f
 workflow AMPLICON_CORE {
     take:
     read_pairs_ch // Standardized read pairs channel
-    metadata_path // Metadata 
+    metadata_file // Metadata file (can be dynamic or static)
     barcode_primer_info_ch // Barcode/primer info (may be empty)
     primers
     trimming_options // Unified cutadapt configuration
@@ -58,7 +58,7 @@ workflow AMPLICON_CORE {
     ]
 
     trimming_config = [
-        enabled: trimming_options.enabled ?: true,
+        enabled: trimming_options.enabled,
         use_sampleseq: trimming_options.use_sampleseq ?: false,
         skip_polyg_trim: trimming_options.skip_polyg_trim ?: false,
     ]
@@ -66,6 +66,16 @@ workflow AMPLICON_CORE {
     // Run regular quality control on original reads for comparison
     WF_QUALITY_CONTROL(read_pairs_ch)
 
+    if (trimming_config.enabled) {
+        if (barcode_primer_info_ch.isEmpty()) {
+            log.warn "Trimming is enabled but no barcode/primer information provided. Skipping trimming step."
+            trimming_config.enabled = false
+        }
+        else if (primers.isEmpty()) {
+            log.warn "Trimming is enabled but no primer sequences provided. Skipping trimming step."
+            trimming_config.enabled = false
+        }
+    }
     trimming_results = WF_CUTADAPT(
         read_pairs_ch,
         barcode_primer_info_ch,
@@ -106,7 +116,7 @@ workflow AMPLICON_CORE {
     filtering_results_ch = WF_FILTER_BY_METADATA(
         dada2_feature_table,
         dada2_rep_seqs,
-        metadata_path,
+        metadata_file,
     )
 
     // Conditional decontamination based on method specified
@@ -114,7 +124,7 @@ workflow AMPLICON_CORE {
         decontam_results_ch = WF_DECONTAM_FREQUENCY(
             filtering_results_ch.filtered_feature_table,
             filtering_results_ch.filtered_rep_seqs,
-            metadata_path,
+            metadata_file,
             decontam_config.freq_concentration_column,
             decontam_config.threshold,
         )
@@ -130,7 +140,7 @@ workflow AMPLICON_CORE {
         decontam_results_ch = WF_DECONTAM_PREVALENCE(
             filtering_results_ch.filtered_feature_table,
             filtering_results_ch.filtered_rep_seqs,
-            metadata_path,
+            metadata_file,
             decontam_config.prev_control_column,
             decontam_config.prev_control_indicator,
             decontam_config.threshold,
@@ -158,7 +168,7 @@ workflow AMPLICON_CORE {
         filtered_rep_seqs,
         database_ch_list.classifier,
         filtered_feature_table,
-        metadata_path,
+        metadata_file,
     )
 
     classified_taxa_ch = taxonomy_results_ch.classification
@@ -209,7 +219,7 @@ workflow AMPLICON_CORE {
     WF_EVALUATE_GRAM_STAINING(
         classified_taxa_ch,
         filtered_feature_table,
-        metadata_path,
+        metadata_file,
     )
 
     // Phylogenetic Analysis (Optional)
@@ -222,7 +232,7 @@ workflow AMPLICON_CORE {
         if (other_options?.amplicon_type == "ITS" || other_options?.database == "unite") {
             diversity_results_ch = WF_DIVERSITY_CORE_METRICS(
                 filtered_feature_table,
-                metadata_path,
+                metadata_file,
                 other_options.diversity_sampling_depth,
                 [id: "diversity_analysis"],
             )
@@ -232,7 +242,7 @@ workflow AMPLICON_CORE {
             diversity_results_ch = WF_DIVERSITY_CORE_METRICS_PHYLOGENETIC(
                 filtered_feature_table,
                 ALIGN_AND_TREE_QIIME2.out.rooted_tree_qza,
-                metadata_path,
+                metadata_file,
                 other_options.diversity_sampling_depth,
                 [id: "diversity_analysis"],
             )

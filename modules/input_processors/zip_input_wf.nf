@@ -43,6 +43,7 @@ workflow WF_ZIP_INPUT {
     read_pairs_ch = read_pairs_ch
     barcode_primer_info_ch = barcode_primer_info_ch
     sampleseq_file_ch = sampleseq_file_ch
+    metadata_tsv = Channel.empty()  // No metadata for ZIP input (uses SampleSeq)
     input_type = Channel.value("zip")
     // Cutadapt options for ZIP mode - use SampleSeq info
 }
