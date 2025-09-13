@@ -67,38 +67,39 @@ workflow AMPLICON_CORE {
     WF_QUALITY_CONTROL(read_pairs_ch)
 
     if (trimming_config.enabled) {
-        if (barcode_primer_info_ch.isEmpty()) {
-            log.warn "Trimming is enabled but no barcode/primer information provided. Skipping trimming step."
-            trimming_config.enabled = false
-        }
-        else if (primers.isEmpty()) {
-            log.warn "Trimming is enabled but no primer sequences provided. Skipping trimming step."
-            trimming_config.enabled = false
-        }
+        trimming_results = WF_CUTADAPT(
+            read_pairs_ch,
+            barcode_primer_info_ch,
+            trimming_config,
+            primers
+        )
+
+        // Process exported fastqs for QC after cutadapt
+        trimming_results.exported_fastqs
+            .map { sample_name, fastq1, fastq2 ->
+                return tuple(sample_name, [fastq1, fastq2])
+            }
+            .set { exported_fastqs_pairs_ch }
+
+        // Use exported fastqs for downstream analysis (DADA2 needs raw FASTQ files)
+        sequences_for_dada2 = exported_fastqs_pairs_ch
+
+        WF_QUALITY_CONTROL_AFTER_CUTADAPT(exported_fastqs_pairs_ch)
+        // Run QC on the exported fastqs after cutadapt
+        fastqc_after_cutadapt = WF_QUALITY_CONTROL_AFTER_CUTADAPT.out.fastqc_results 
+        multiqc_after_cutadapt = WF_QUALITY_CONTROL_AFTER_CUTADAPT.out.multiqc_report
+    } else {
+        // No trimming - use original reads directly
+        sequences_for_dada2 = read_pairs_ch
+
+        // Create empty channels for QC after cutadapt
+        fastqc_after_cutadapt = Channel.empty()
+        multiqc_after_cutadapt = Channel.empty()
     }
-    trimming_results = WF_CUTADAPT(
-        read_pairs_ch,
-        barcode_primer_info_ch,
-        trimming_config,
-        primers
-    )
-
-    // Process exported fastqs for QC after cutadapt
-    trimming_results.exported_fastqs
-        .map { sample_name, fastq1, fastq2 ->
-            return tuple(sample_name, [fastq1, fastq2])
-        }
-        .set { exported_fastqs_pairs_ch }
-
-    // Use exported fastqs for downstream analysis (DADA2 needs raw FASTQ files)
-    trimmed_sequences_for_dada2 = exported_fastqs_pairs_ch
-
-    // Run QC on the exported fastqs after cutadapt
-    WF_QUALITY_CONTROL_AFTER_CUTADAPT(exported_fastqs_pairs_ch)
 
     // DADA2 denoising
     dada2_output_ch = WF_DENOISE_DADA2(
-        trimmed_sequences_for_dada2,
+        sequences_for_dada2,
         dada2_config.trunc_len_f,
         dada2_config.trunc_len_r,
         dada2_config.trim_left_f,
@@ -252,8 +253,8 @@ workflow AMPLICON_CORE {
     emit:
     fastqc_results = WF_QUALITY_CONTROL.out.fastqc_results
     multiqc_report = WF_QUALITY_CONTROL.out.multiqc_report
-    fastqc_results_after_cutadapt = WF_QUALITY_CONTROL_AFTER_CUTADAPT.out.fastqc_results
-    multiqc_report_after_cutadapt = WF_QUALITY_CONTROL_AFTER_CUTADAPT.out.multiqc_report
+    fastqc_results_after_cutadapt = fastqc_after_cutadapt
+    multiqc_report_after_cutadapt = multiqc_after_cutadapt
     dada2_denoising_stats = dada2_denoising_stats
     dada2_ft_summary = WF_DENOISE_DADA2.out.feature_table_summary
     dada2_rep_seqs_summary = WF_DENOISE_DADA2.out.rep_seqs_summary
