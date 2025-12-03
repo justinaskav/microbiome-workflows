@@ -70,6 +70,7 @@ process RUN_DADA2_PAIRED_END_QIIME2 {
     path("table.qza"), emit: feature_table_qza
     path("rep-seqs.qza"), emit: rep_seqs_qza
     path("denoising-stats.qza"), emit: denoising_stats_qza
+    path("base-transition-stats.qza"), emit: base_transition_stats_qza
 
     script:
     // Use dada2_n_threads if provided, else default to task.cpus, or 1 if task.cpus is 0
@@ -87,6 +88,26 @@ process RUN_DADA2_PAIRED_END_QIIME2 {
         --o-table table.qza \\
         --o-representative-sequences rep-seqs.qza \\
         --o-denoising-stats denoising-stats.qza \\
+        --o-base-transition-stats base-transition-stats.qza \\
+        --verbose
+    """
+}
+
+process PLOT_BASE_TRANSITIONS {
+    tag "plot_base_transitions"
+    conda "${params.qiime2_conda_env}"
+
+    input:
+    path base_transition_stats_qza
+
+    output:
+    path("base_transition_stats.qzv"), emit: base_transition_stats_qzv
+
+    script:
+    """
+    qiime dada2 plot-base-transitions \\
+        --i-base-transition-stats "${base_transition_stats_qza}" \\
+        --o-visualization base_transition_stats.qzv \\
         --verbose
     """
 }
@@ -172,6 +193,7 @@ workflow WF_DENOISE_DADA2 {
         // 4. Generate Summaries/Visualizations
         SUMMARIZE_DEMUX_DADA2 ( demux_qza_ch )
         SUMMARIZE_FEATURE_TABLE_NO_METADATA ( dada2_results_ch.feature_table_qza )
+        PLOT_BASE_TRANSITIONS( dada2_results_ch.base_transition_stats_qza )
         TABULATE_SEQS ( dada2_results_ch.rep_seqs_qza )
         TABULATE_DENOISING_STATS_DADA2 ( dada2_results_ch.denoising_stats_qza )
 
@@ -183,6 +205,7 @@ workflow WF_DENOISE_DADA2 {
         feature_table_summary = SUMMARIZE_FEATURE_TABLE_NO_METADATA.out.feature_table_summary_qzv
         rep_seqs_summary = TABULATE_SEQS.out.rep_seqs_summary_qzv
         denoising_stats_summary = TABULATE_DENOISING_STATS_DADA2.out.denoising_stats_summary_qzv
+        base_transition_stats = PLOT_BASE_TRANSITIONS.out.base_transition_stats_qzv
         imported_demux_qza = demux_qza_ch
 }
 

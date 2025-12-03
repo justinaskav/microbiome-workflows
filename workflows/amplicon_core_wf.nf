@@ -259,6 +259,7 @@ workflow AMPLICON_CORE {
     dada2_ft_summary = WF_DENOISE_DADA2.out.feature_table_summary
     dada2_rep_seqs_summary = WF_DENOISE_DADA2.out.rep_seqs_summary
     dada2_denoising_stats_summary = WF_DENOISE_DADA2.out.denoising_stats_summary
+    dada2_base_transition_stats_summary = WF_DENOISE_DADA2.out.base_transition_stats
     decontam_scores_freq = decontam_scores_freq
     decontam_scores_freq_viz = decontam_scores_freq_viz
     decontam_scores_prev = decontam_scores_prev

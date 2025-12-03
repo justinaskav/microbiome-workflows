@@ -6,7 +6,6 @@ process EVALUATE_TAXONOMY {
     label 'process_low'
     
     conda "${params.qiime2_conda_env}"
-    cpus params.taxonomy_evaluation_cpus ?: 1
 
     input:
     path taxonomy_qzas       // One or more taxonomy artifacts (.qza)

@@ -53,6 +53,7 @@ workflow AMPLICON_WORKFLOW {
     dada2_ft_summary = workflow_results.dada2_ft_summary
     dada2_rep_seqs_summary = workflow_results.dada2_rep_seqs_summary
     dada2_denoising_stats_summary = workflow_results.dada2_denoising_stats_summary
+    dada2_base_transition_stats_summary = workflow_results.dada2_base_transition_stats_summary
     decontam_scores_freq = workflow_results.decontam_scores_freq
     decontam_scores_freq_viz = workflow_results.decontam_scores_freq_viz
     decontam_scores_prev = workflow_results.decontam_scores_prev
