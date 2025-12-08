@@ -117,6 +117,7 @@ workflow WF_DADA2_TAXONOMY {
     feature_table            // Path to feature table (optional, for visualization)
     silva_trainset          // SILVA trainset file for genus-level classification
     silva_species           // SILVA species file for species assignment
+    metadata_file
     
     main:
     
@@ -161,20 +162,21 @@ workflow WF_DADA2_TAXONOMY {
     )
     
     // Visualize taxonomy if feature table is provided
-    // taxonomy_barplot_ch = Channel.empty()
-    // if (feature_table) {
-    //     // Create barplot visualization using the common visualization workflow
-    //     taxonomy_barplot_ch = VISUALIZE_TAXONOMY(
-    //         qiime2_tax_ch.taxonomy_qza,
-    //         feature_table,
-    //         "dada2_taxonomy_barplot"
-    //     ).barplot
-    // }
+    taxonomy_barplot_ch = Channel.empty()
+    if (feature_table) {
+        // Create barplot visualization using the common visualization workflow
+        taxonomy_barplot_ch = VISUALIZE_TAXONOMY(
+            qiime2_tax_ch.taxonomy_qza,
+            feature_table,
+            "dada2_taxonomy_barplot",
+            metadata_file ?: null // Use first metadata file if available
+        ).barplot
+    }
     
     emit:
     dada2_taxonomy = dada2_tax_ch.taxonomy_tsv
     dada2_species_taxonomy = dada2_species_ch.taxonomy_with_species_tsv
     dada2_formatted_taxonomy = formatted_tax_ch.formatted_tsv
     qiime2_taxonomy = qiime2_tax_ch.taxonomy_qza
-    // taxonomy_barplot = taxonomy_barplot_ch
+    taxonomy_barplot = taxonomy_barplot_ch
 }

@@ -181,6 +181,7 @@ workflow AMPLICON_CORE {
             filtered_feature_table,
             database_ch_list.refs.trainset,
             database_ch_list.refs.species,
+            metadata_file
         )
 
         if (taxonomy_config.enable_comparison) {
@@ -269,6 +270,7 @@ workflow AMPLICON_CORE {
     phylogeny_unrooted = ALIGN_AND_TREE_QIIME2.out.unrooted_tree_qza
     phylogeny_rooted = ALIGN_AND_TREE_QIIME2.out.rooted_tree_qza
     dada2_taxonomy = dada2_taxonomy_ch
+    dada2_taxonomy_summary = WF_DADA2_TAXONOMY.out.taxonomy_barplot
     taxonomy_evaluation = taxonomy_evaluation_ch
     taxonomy_comparison = taxonomy_comparison_ch
     gram_staining_evaluation = WF_EVALUATE_GRAM_STAINING.out.gram_staining_eval_results

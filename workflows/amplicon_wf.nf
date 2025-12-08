@@ -63,6 +63,7 @@ workflow AMPLICON_WORKFLOW {
     phylogeny_unrooted = workflow_results.phylogeny_unrooted
     phylogeny_rooted = workflow_results.phylogeny_rooted
     dada2_taxonomy = workflow_results.dada2_taxonomy
+    dada2_taxonomy_summary = workflow_results.dada2_taxonomy_summary
     taxonomy_evaluation = workflow_results.taxonomy_evaluation
     taxonomy_comparison = workflow_results.taxonomy_comparison
     gram_staining_evaluation = workflow_results.gram_staining_evaluation
