@@ -1,20 +1,35 @@
-// FASTQ Input Processing Workflow  
+// FASTQ Input Processing Workflow
 // Processes direct fastq files and outputs standardized fastq pairs + metadata
 
 nextflow.enable.dsl = 2
 
+// Supported patterns for different Illumina naming conventions
+def DEFAULT_PATTERNS = [
+    '*_{R1,R2}_001.fastq.gz',           // Most common
+    '*_L001_{R1,R2}_001.fastq.gz',      // With lane info
+    '*_{1,2}.fastq.gz',                  // Simple numbered
+    '*_R{1,2}.fastq.gz',                 // Simple R1/R2
+]
+
 workflow WF_FASTQ_INPUT {
     take:
-    data_dir                    // Data directory path
+    data_dir                    // Data directory path or map with data_dir and fastq_pattern
 
     main:
-    // Data is already in standard format - directly read fastq files
-    // Look for standard paired-end fastq files
-    read_pairs_ch = Channel.fromFilePairs("${data_dir}/*_L001_{R1,R2}_001.fastq.gz", size: 2)
+    // Handle both string (legacy) and map input
+    def dir_path = data_dir instanceof Map ? data_dir.data_dir : data_dir
+    def custom_pattern = data_dir instanceof Map ? data_dir.fastq_pattern : null
 
-    // Trim _S part from sample names if present
+    // Use custom pattern, params pattern, or try default patterns
+    def pattern = custom_pattern ?: params.fastq_pattern ?: '*_{R1,R2}_001.fastq.gz'
+
+    read_pairs_ch = Channel.fromFilePairs("${dir_path}/${pattern}", size: 2)
+
+    // Trim _S and _L001 parts from sample names if present for cleaner IDs
     read_pairs_ch = read_pairs_ch.map { sample_name, files ->
-        def trimmed_sample_name = sample_name.replaceAll(/_S\d+$/, "") // Remove any _S<number> suffix
+        def trimmed_sample_name = sample_name
+            .replaceAll(/_S\d+$/, "")      // Remove _S<number> suffix
+            .replaceAll(/_L\d{3}$/, "")    // Remove _L001 etc suffix
         return tuple(trimmed_sample_name, files)
     }
 

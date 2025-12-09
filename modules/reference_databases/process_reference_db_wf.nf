@@ -108,7 +108,6 @@ process EDIT_TAXONOMY {
 process DEREPLICATE_DATABASE {
     tag "$meta.id - Dereplicate"
     label 'process_high'
-    cpus 2
 
     conda "${params.qiime2_conda_env}"
 

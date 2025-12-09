@@ -38,9 +38,8 @@ workflow WF_INPUT_PROCESSING {
     }
     else {
         // FASTQ input mode (default)
-        input_results = WF_FASTQ_INPUT(
-            input_options.data_dir
-        )
+        // Pass full input_options to allow fastq_pattern customization
+        input_results = WF_FASTQ_INPUT(input_options)
     }
 
     emit:

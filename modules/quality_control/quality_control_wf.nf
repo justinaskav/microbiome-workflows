@@ -1,6 +1,7 @@
 // Process to run FastQC on read pairs
 process RUN_FASTQC {
     conda 'bioconda::fastqc'
+    cpus params.fastqc_cpus ?: 2
 
     input:
     tuple val(meta), path(reads) // Expects e.g. [ id:"sample1", [read1.fq.gz, read2.fq.gz] ]
@@ -9,9 +10,9 @@ process RUN_FASTQC {
     tuple val(meta), path("*.{html,zip}"), emit: fastqc_results // Emits [ meta, [sample_R1_fastqc.html, ..., sample_R2_fastqc.zip] ]
 
     script:
-    // Ensure unique output names if multiple samples have same read names (less common with good meta.id)
+    def threads = task.cpus > 0 ? task.cpus : 1
     """
-    fastqc -o . --noextract ${reads[0]} ${reads[1]}
+    fastqc -t ${threads} -o . --noextract ${reads[0]} ${reads[1]}
     """
 }
 

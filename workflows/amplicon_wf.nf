@@ -49,7 +49,7 @@ workflow AMPLICON_WORKFLOW {
     multiqc_report = workflow_results.multiqc_report
     fastqc_results_after_cutadapt = workflow_results.fastqc_results_after_cutadapt
     multiqc_report_after_cutadapt = workflow_results.multiqc_report_after_cutadapt
-    dada2_denoising_stats = workflow_results?.dada2_denoising_stats
+    dada2_denoising_stats = workflow_results.dada2_denoising_stats
     dada2_ft_summary = workflow_results.dada2_ft_summary
     dada2_rep_seqs_summary = workflow_results.dada2_rep_seqs_summary
     dada2_denoising_stats_summary = workflow_results.dada2_denoising_stats_summary

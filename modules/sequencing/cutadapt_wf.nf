@@ -32,6 +32,7 @@ process IMPORT_READS_TO_QZA {
 
 process TRIM_CUTADAPT {
     tag "Trim ${sampleId}"
+    cpus params.cutadapt?.cpus ?: 4
 
     conda params.qiime2_conda_env
 
@@ -43,7 +44,8 @@ process TRIM_CUTADAPT {
 
     script:
     def discard_untrimmed = true
-    def minimum_length = 100
+    def minimum_length = params.cutadapt?.minimum_length ?: 100
+    def cores = task.cpus > 0 ? task.cpus : 1
 
     def forw_read_5 = "${barcode_f}${primer_f}"
     def rev_read_5 = "${barcode_r}${primer_r}"
@@ -51,6 +53,7 @@ process TRIM_CUTADAPT {
     """
     qiime cutadapt trim-paired \
       --i-demultiplexed-sequences ${demuxArtifact} \
+      --p-cores ${cores} \
       --p-front-f ${forw_read_5} \
       --p-front-r ${rev_read_5} \
       --p-minimum-length ${minimum_length} \
@@ -62,6 +65,7 @@ process TRIM_CUTADAPT {
 
 process TRIM_POLYG_SEQUENCES {
     tag "Trim polyG ${sampleId}"
+    cpus params.cutadapt?.cpus ?: 4
 
     conda params.qiime2_conda_env
 
@@ -72,13 +76,16 @@ process TRIM_POLYG_SEQUENCES {
     tuple val(sampleId), path("${sampleId}_polyg_trimmed.qza"), emit: polyg_trimmed_artifact
 
     script:
-    def minimum_length = 100
+    def minimum_length = params.cutadapt?.minimum_length ?: 100
+    def polyg_adapter = params.cutadapt?.polyg_adapter ?: 'GGGGGGGG'
+    def cores = task.cpus > 0 ? task.cpus : 1
 
     """
     qiime cutadapt trim-paired \
       --i-demultiplexed-sequences ${trimmedArtifact} \
-      --p-adapter-f GGGGGGGG \
-      --p-adapter-r GGGGGGGG \
+      --p-cores ${cores} \
+      --p-adapter-f ${polyg_adapter} \
+      --p-adapter-r ${polyg_adapter} \
       --p-minimum-length ${minimum_length} \
       --o-trimmed-sequences ${sampleId}_polyg_trimmed.qza \
       --verbose
@@ -194,28 +201,32 @@ process TRIM_MERGED_CUTADAPT {
     path "trimmed_sequences_summary.qzv", emit: trimmed_sequences_summary
 
     script:
-    def minimum_length = 100
+    def minimum_length = params.cutadapt?.minimum_length ?: 100
+    def polyg_adapter = params.cutadapt?.polyg_adapter ?: 'GGGGGGGG'
+    def cores = task.cpus > 0 ? task.cpus : 1
 
     """
     # Apply primer trimming to all sequences at once
     qiime cutadapt trim-paired \
       --i-demultiplexed-sequences ${merged_sequences} \
+      --p-cores ${cores} \
       --p-front-f ${primer_f} \
       --p-front-r ${primer_r} \
       --p-minimum-length ${minimum_length} \
       --p-discard-untrimmed \
       --o-trimmed-sequences primer_trimmed.qza \
       --verbose
-    
+
     # Apply poly-G trimming
     qiime cutadapt trim-paired \
       --i-demultiplexed-sequences primer_trimmed.qza \
-      --p-adapter-f GGGGGGGGG \
-      --p-adapter-r GGGGGGGGG \
+      --p-cores ${cores} \
+      --p-adapter-f ${polyg_adapter} \
+      --p-adapter-r ${polyg_adapter} \
       --p-minimum-length ${minimum_length} \
       --o-trimmed-sequences trimmed_sequences.qza \
       --verbose
-    
+
     # Summarize the final trimmed sequences
     qiime demux summarize \
       --i-data trimmed_sequences.qza \
@@ -233,7 +244,6 @@ workflow WF_CUTADAPT {
 
     main:
 
-    println "Trimming config: ${trimming_config}"
     if (trimming_config.enabled) {
 
         if (trimming_config.use_sampleseq) {
