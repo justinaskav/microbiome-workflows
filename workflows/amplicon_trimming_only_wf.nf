@@ -1,11 +1,13 @@
 // Amplicon Trimming-Only Workflow
 // Runs input processing + QC + cutadapt, emits trimmed reads for later merging
+// Also serves as the de facto QC workflow (provides QC before and after trimming)
 
 nextflow.enable.dsl = 2
 
-include { WF_INPUT_PROCESSING } from './amplicon_input_processing_wf.nf'
-include { WF_QUALITY_CONTROL ; WF_QUALITY_CONTROL as WF_QUALITY_CONTROL_AFTER_CUTADAPT } from '../modules/quality_control/quality_control_wf.nf'
-include { WF_CUTADAPT } from '../modules/sequencing/cutadapt_wf.nf'
+// Include subworkflows
+include { INPUT_PROCESSING } from '../subworkflows/input_processing_wf.nf'
+include { QC } from '../subworkflows/qc_wf.nf'
+include { TRIMMING } from '../subworkflows/trimming_wf.nf'
 
 workflow AMPLICON_TRIMMING_ONLY {
     take:
@@ -17,42 +19,41 @@ workflow AMPLICON_TRIMMING_ONLY {
 
     main:
 
-    input_processing_results = WF_INPUT_PROCESSING(input_options)
+    // Step 1: Input Processing
+    input_processing_results = INPUT_PROCESSING(input_options)
 
+    // Use dynamic metadata if available, otherwise use static path
     metadata_to_use = input_processing_results.metadata_file.ifEmpty(
         metadata_path ? file(metadata_path) : Channel.empty()
     )
 
+    // Step 2: Quality Control on original reads
+    qc_results = QC(input_processing_results.read_pairs_ch)
+
+    // Step 3: Trimming
     trimming_config = [
         enabled: trimming_options.enabled ?: true,
         use_sampleseq: trimming_options.use_sampleseq ?: false,
         skip_polyg_trim: trimming_options.skip_polyg_trim ?: false,
     ]
 
-    // QC on original reads
-    WF_QUALITY_CONTROL(input_processing_results.read_pairs_ch)
-
     if (trimming_config.enabled) {
-        trimming_results = WF_CUTADAPT(
+        trimming_results = TRIMMING(
             input_processing_results.read_pairs_ch,
             input_processing_results.barcode_primer_info_ch,
-            trimming_config,
-            primers
+            primers,
+            trimming_options
         )
 
-        trimmed_reads_ch = trimming_results.exported_fastqs
-            .map { sample_name, fastq1, fastq2 -> tuple(sample_name, [fastq1, fastq2]) }
-
-        WF_QUALITY_CONTROL_AFTER_CUTADAPT(trimmed_reads_ch)
-
-        fastqc_after_cutadapt = WF_QUALITY_CONTROL_AFTER_CUTADAPT.out.fastqc_results
-        multiqc_after_cutadapt = WF_QUALITY_CONTROL_AFTER_CUTADAPT.out.multiqc_report
+        trimmed_reads_ch = trimming_results.trimmed_reads
         trimmed_qza = trimming_results.trimmed_sequences
+        fastqc_after_cutadapt = trimming_results.fastqc_results_after_trim
+        multiqc_after_cutadapt = trimming_results.multiqc_report_after_trim
     } else {
         trimmed_reads_ch = input_processing_results.read_pairs_ch
+        trimmed_qza = Channel.empty()
         fastqc_after_cutadapt = Channel.empty()
         multiqc_after_cutadapt = Channel.empty()
-        trimmed_qza = Channel.empty()
     }
 
     emit:
@@ -60,8 +61,8 @@ workflow AMPLICON_TRIMMING_ONLY {
     trimmed_qza = trimmed_qza
     metadata_file = metadata_to_use
     barcode_primer_info = input_processing_results.barcode_primer_info_ch
-    fastqc_results = WF_QUALITY_CONTROL.out.fastqc_results
-    multiqc_report = WF_QUALITY_CONTROL.out.multiqc_report
+    fastqc_results = qc_results.fastqc_results
+    multiqc_report = qc_results.multiqc_report
     fastqc_results_after_cutadapt = fastqc_after_cutadapt
     multiqc_report_after_cutadapt = multiqc_after_cutadapt
 }

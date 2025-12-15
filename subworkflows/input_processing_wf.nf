@@ -1,3 +1,8 @@
+// Input Processing Subworkflow
+// Handles various input formats and standardizes output for downstream processing
+
+nextflow.enable.dsl = 2
+
 // Include input processors
 include { WF_ZIP_INPUT } from '../modules/input_processors/zip_input_wf.nf'
 include { WF_FASTQ_INPUT } from '../modules/input_processors/fastq_input_wf.nf'
@@ -5,14 +10,14 @@ include { WF_ACCESSION_INPUT } from '../modules/input_processors/accession_input
 include { WF_QZA_INPUT } from '../modules/input_processors/qza_input_wf.nf'
 
 // Input processing workflow - handles all input types and prepares options
-workflow WF_INPUT_PROCESSING {
+workflow INPUT_PROCESSING {
     take:
     input_options
 
     main:
 
     println("Input options: ${input_options}")
-    
+
     // Input processing based on input type
     if (input_options?.zip_filename != null) {
         // ZIP input mode

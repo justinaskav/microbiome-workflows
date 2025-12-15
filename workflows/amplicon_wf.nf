@@ -1,11 +1,19 @@
-// Include input processing workflow
-include { WF_INPUT_PROCESSING } from './amplicon_input_processing_wf.nf'
+// Amplicon Workflow - Main Orchestrator
+// Chains all subworkflows for complete amplicon analysis pipeline
 
-// Include core processing workflows
-include { AMPLICON_CORE } from './amplicon_core_wf.nf'
-include { AMPLICON_QC_ONLY } from './amplicon_qc_only_wf.nf'
+nextflow.enable.dsl = 2
 
-// Multi-modal workflow dispatcher
+// Include subworkflows
+include { INPUT_PROCESSING } from '../subworkflows/input_processing_wf.nf'
+include { QC } from '../subworkflows/qc_wf.nf'
+include { TRIMMING } from '../subworkflows/trimming_wf.nf'
+include { DADA2 } from '../subworkflows/dada2_wf.nf'
+include { FILTERING } from '../subworkflows/filtering_wf.nf'
+include { TAXONOMY } from '../subworkflows/taxonomy_wf.nf'
+include { PHYLOGENY } from '../subworkflows/phylogeny_wf.nf'
+include { DIVERSITY } from '../subworkflows/diversity_wf.nf'
+
+// Main amplicon workflow
 workflow AMPLICON_WORKFLOW {
     take:
     name
@@ -13,7 +21,7 @@ workflow AMPLICON_WORKFLOW {
     input_options
     primers
     trimming_options
-    dada2_options // DADA2 
+    dada2_options
     decontam_options
     taxonomy_options
     database_ch_list
@@ -21,53 +29,116 @@ workflow AMPLICON_WORKFLOW {
 
     main:
 
-    // Full analysis pipeline (default)
-    input_processing_results = WF_INPUT_PROCESSING(
-        input_options,
-    )
+    // Step 1: Input Processing
+    input_processing_results = INPUT_PROCESSING(input_options)
 
     // Use dynamic metadata if available, otherwise use static path
     metadata_to_use = input_processing_results.metadata_file.ifEmpty(
         metadata_path ? file(metadata_path) : Channel.empty()
     )
 
-    workflow_results = AMPLICON_CORE(
-        input_processing_results.read_pairs_ch,
+    // Step 2: Quality Control on original reads
+    qc_results = QC(input_processing_results.read_pairs_ch)
+
+    // Step 3: Trimming (optional)
+    trimming_config = [
+        enabled: trimming_options.enabled ?: false,
+        use_sampleseq: trimming_options.use_sampleseq ?: false,
+        skip_polyg_trim: trimming_options.skip_polyg_trim ?: false,
+    ]
+
+    if (trimming_config.enabled) {
+        trimming_results = TRIMMING(
+            input_processing_results.read_pairs_ch,
+            input_processing_results.barcode_primer_info_ch,
+            primers,
+            trimming_options
+        )
+        sequences_for_dada2 = trimming_results.trimmed_reads
+        fastqc_after_cutadapt = trimming_results.fastqc_results_after_trim
+        multiqc_after_cutadapt = trimming_results.multiqc_report_after_trim
+    } else {
+        sequences_for_dada2 = input_processing_results.read_pairs_ch
+        fastqc_after_cutadapt = Channel.empty()
+        multiqc_after_cutadapt = Channel.empty()
+    }
+
+    // Step 4: DADA2 Denoising
+    dada2_results = DADA2(sequences_for_dada2, dada2_options)
+
+    // Step 5: Filtering (metadata filtering + decontamination)
+    filtering_results = FILTERING(
+        dada2_results.feature_table,
+        dada2_results.rep_seqs,
         metadata_to_use,
-        input_processing_results.barcode_primer_info_ch,
-        primers,
-        trimming_options,
-        dada2_options,
-        decontam_options,
-        taxonomy_options,
+        decontam_options
+    )
+
+    // Step 6: Taxonomy Classification
+    taxonomy_results = TAXONOMY(
+        filtering_results.filtered_rep_seqs,
+        filtering_results.filtered_feature_table,
+        metadata_to_use,
         database_ch_list,
-        other_options,
+        taxonomy_options
+    )
+
+    // Step 7: Phylogeny
+    phylogeny_results = PHYLOGENY(filtering_results.filtered_rep_seqs)
+
+    // Step 8: Diversity Analysis (optional)
+    diversity_options = [
+        sampling_depth: other_options?.diversity_sampling_depth,
+        amplicon_type: other_options?.amplicon_type,
+        database: other_options?.database,
+    ]
+
+    diversity_results = DIVERSITY(
+        filtering_results.filtered_feature_table,
+        phylogeny_results.rooted_tree,
+        metadata_to_use,
+        diversity_options
     )
 
     emit:
-    fastqc_results = workflow_results.fastqc_results
-    multiqc_report = workflow_results.multiqc_report
-    fastqc_results_after_cutadapt = workflow_results.fastqc_results_after_cutadapt
-    multiqc_report_after_cutadapt = workflow_results.multiqc_report_after_cutadapt
-    dada2_denoising_stats = workflow_results.dada2_denoising_stats
-    dada2_ft_summary = workflow_results.dada2_ft_summary
-    dada2_rep_seqs_summary = workflow_results.dada2_rep_seqs_summary
-    dada2_denoising_stats_summary = workflow_results.dada2_denoising_stats_summary
-    dada2_base_transition_stats_summary = workflow_results.dada2_base_transition_stats_summary
-    decontam_scores_freq = workflow_results.decontam_scores_freq
-    decontam_scores_freq_viz = workflow_results.decontam_scores_freq_viz
-    decontam_scores_prev = workflow_results.decontam_scores_prev
-    decontam_scores_prev_viz = workflow_results.decontam_scores_prev_viz
-    taxonomy = workflow_results.taxonomy
-    taxonomy_summary = workflow_results.taxonomy_summary
-    phylogeny_unrooted = workflow_results.phylogeny_unrooted
-    phylogeny_rooted = workflow_results.phylogeny_rooted
-    dada2_taxonomy = workflow_results.dada2_taxonomy
-    dada2_taxonomy_summary = workflow_results.dada2_taxonomy_summary
-    taxonomy_evaluation = workflow_results.taxonomy_evaluation
-    taxonomy_comparison = workflow_results.taxonomy_comparison
-    gram_staining_evaluation = workflow_results.gram_staining_evaluation
-    diversity_results = workflow_results.diversity_results
-    feature_table = workflow_results.feature_table
-    rep_seqs = workflow_results.rep_seqs
+    // QC results
+    fastqc_results = qc_results.fastqc_results
+    multiqc_report = qc_results.multiqc_report
+    fastqc_results_after_cutadapt = fastqc_after_cutadapt
+    multiqc_report_after_cutadapt = multiqc_after_cutadapt
+
+    // DADA2 results
+    dada2_denoising_stats = dada2_results.denoising_stats
+    dada2_ft_summary = dada2_results.feature_table_summary
+    dada2_rep_seqs_summary = dada2_results.rep_seqs_summary
+    dada2_denoising_stats_summary = dada2_results.denoising_stats_summary
+    dada2_base_transition_stats_summary = dada2_results.base_transition_stats
+
+    // Filtering/Decontam results
+    decontam_scores_freq = filtering_results.decontam_scores
+    decontam_scores_freq_viz = filtering_results.decontam_scores_viz
+    decontam_scores_prev = Channel.empty()  // Simplified - using single channel for both methods
+    decontam_scores_prev_viz = Channel.empty()
+
+    // Taxonomy results
+    taxonomy = taxonomy_results.taxonomy
+    taxonomy_summary = taxonomy_results.taxonomy_summary
+    dada2_taxonomy = taxonomy_results.dada2_taxonomy
+    dada2_taxonomy_summary = taxonomy_results.dada2_taxonomy_summary
+    taxonomy_evaluation = taxonomy_results.taxonomy_evaluation
+    taxonomy_comparison = taxonomy_results.taxonomy_comparison
+    gram_staining_evaluation = taxonomy_results.gram_staining_evaluation
+
+    // Phylogeny results
+    phylogeny_unrooted = phylogeny_results.unrooted_tree
+    phylogeny_rooted = phylogeny_results.rooted_tree
+
+    // Diversity results
+    rarefied_table = diversity_results.rarefied_table
+    jaccard_emperor = diversity_results.jaccard_emperor
+    bray_curtis_emperor = diversity_results.bray_curtis_emperor
+
+    // Final outputs
+    feature_table = filtering_results.filtered_feature_table
+    rep_seqs = filtering_results.filtered_rep_seqs
 }
