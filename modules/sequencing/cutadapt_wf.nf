@@ -142,6 +142,7 @@ process EXPORT_QIIME2_ARTIFACT {
 
 process IMPORT_FASTQS_TO_QIIME2 {
     tag "Import FASTQ files to QIIME2"
+    cache 'lenient'
 
     conda params.qiime2_conda_env
 

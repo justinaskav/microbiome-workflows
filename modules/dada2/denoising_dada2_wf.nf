@@ -1,6 +1,7 @@
 // Process to create the manifest file for all samples
 process CREATE_DADA2_MANIFEST {
     tag "create_dada2_manifest"
+    cache 'lenient'
 
     input:
     val read_pair_list // List of [meta, [r1_path, r2_path]]
