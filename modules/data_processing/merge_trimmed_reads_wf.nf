@@ -34,10 +34,12 @@ process MERGE_METADATA {
 
     script:
     """
-    # Take header from first file, then data from all files (skipping headers)
-    head -1 \$(ls metadata_*.tsv | head -1) > merged_metadata.tsv
+    # QIIME2 metadata has 2 header lines: column names and #q2:types directive
+    # Take both header lines from first file, then data from all files (skipping both headers)
+    first_file=\$(ls metadata_*.tsv | head -1)
+    head -2 "\$first_file" > merged_metadata.tsv
     for f in metadata_*.tsv; do
-        tail -n +2 "\$f" >> merged_metadata.tsv
+        tail -n +3 "\$f" >> merged_metadata.tsv
     done
     """
 }
