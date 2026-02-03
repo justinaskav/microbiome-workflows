@@ -61,35 +61,19 @@ workflow PICRUST2 {
     pathway_jaccard_pcoa_ch = Channel.empty()
     pathway_bray_curtis_pcoa_ch = Channel.empty()
 
-    if (picrust2_config.skip_pathway_diversity) {
-        // Explicitly skipped — leave outputs empty
-    } else if (picrust2_config.diversity_sampling_depth) {
-        // Explicit depth provided
-        diversity_results = WF_PICRUST2_PATHWAY_DIVERSITY(
-            picrust2_results.pathway_abundance,
-            metadata_file,
-            picrust2_config.diversity_sampling_depth
-        )
-
-        pathway_rarefied_table_ch = diversity_results.rarefied_table
-        pathway_jaccard_emperor_ch = diversity_results.jaccard_emperor
-        pathway_bray_curtis_emperor_ch = diversity_results.bray_curtis_emperor
-        pathway_observed_features_ch = diversity_results.observed_features_vector
-        pathway_shannon_ch = diversity_results.shannon_vector
-        pathway_evenness_ch = diversity_results.evenness_vector
-        pathway_jaccard_dm_ch = diversity_results.jaccard_distance_matrix
-        pathway_bray_curtis_dm_ch = diversity_results.bray_curtis_distance_matrix
-        pathway_jaccard_pcoa_ch = diversity_results.jaccard_pcoa_results
-        pathway_bray_curtis_pcoa_ch = diversity_results.bray_curtis_pcoa_results
-    } else {
-        // Auto-infer sampling depth from pathway abundance table
-        inferred = WF_INFER_PATHWAY_DEPTH(
-            picrust2_results.pathway_abundance,
-            picrust2_config.auto_depth_percentile
-        )
-        sampling_depth_ch = inferred.sampling_depth_file
-            .map { it.text.trim().toInteger() }
-            .first()
+    if (!picrust2_config.skip_pathway_diversity) {
+        // Resolve sampling depth
+        if (picrust2_config.diversity_sampling_depth) {
+            sampling_depth_ch = Channel.value(picrust2_config.diversity_sampling_depth)
+        } else {
+            inferred = WF_INFER_PATHWAY_DEPTH(
+                picrust2_results.pathway_abundance,
+                picrust2_config.auto_depth_percentile
+            )
+            sampling_depth_ch = inferred.sampling_depth_file
+                .map { it.text.trim().toInteger() }
+                .first()
+        }
 
         diversity_results = WF_PICRUST2_PATHWAY_DIVERSITY(
             picrust2_results.pathway_abundance,

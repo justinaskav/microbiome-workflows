@@ -85,16 +85,16 @@ workflow AMPLICON_WORKFLOW {
     )
 
     // Step 7: PICRUSt2 Functional Prediction (skipped for ITS)
-    if (other_options?.skip_picrust2) {
-        picrust2_ko_metagenome_ch = Channel.empty()
-        picrust2_ec_metagenome_ch = Channel.empty()
-        picrust2_pathway_abundance_ch = Channel.empty()
-        picrust2_ko_summary_ch = Channel.empty()
-        picrust2_ec_summary_ch = Channel.empty()
-        picrust2_pathway_summary_ch = Channel.empty()
-        picrust2_pathway_jaccard_emperor_ch = Channel.empty()
-        picrust2_pathway_bray_curtis_emperor_ch = Channel.empty()
-    } else {
+    picrust2_ko_metagenome_ch = Channel.empty()
+    picrust2_ec_metagenome_ch = Channel.empty()
+    picrust2_pathway_abundance_ch = Channel.empty()
+    picrust2_ko_summary_ch = Channel.empty()
+    picrust2_ec_summary_ch = Channel.empty()
+    picrust2_pathway_summary_ch = Channel.empty()
+    picrust2_pathway_jaccard_emperor_ch = Channel.empty()
+    picrust2_pathway_bray_curtis_emperor_ch = Channel.empty()
+
+    if (!other_options?.skip_picrust2) {
         picrust2_options = [
             threads: other_options?.picrust2_threads,
             diversity_sampling_depth: other_options?.picrust2_diversity_sampling_depth,

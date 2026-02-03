@@ -21,12 +21,19 @@ workflow DIVERSITY {
     jaccard_emperor_ch = Channel.empty()
     bray_curtis_emperor_ch = Channel.empty()
 
-    if (diversity_options?.skip) {
-        // Explicitly skipped — leave outputs empty
-    } else if (diversity_options?.sampling_depth) {
-        // Explicit depth provided — use it directly
-        sampling_depth_ch = Channel.value(diversity_options.sampling_depth)
+    if (!diversity_options?.skip) {
+        // Step 1: Resolve sampling depth
+        if (diversity_options?.sampling_depth) {
+            sampling_depth_ch = Channel.value(diversity_options.sampling_depth)
+        } else {
+            def percentile = diversity_options?.auto_depth_percentile ?: 0.0
+            inferred = WF_INFER_SAMPLING_DEPTH(feature_table, percentile)
+            sampling_depth_ch = inferred.sampling_depth_file
+                .map { it.text.trim().toInteger() }
+                .first()
+        }
 
+        // Step 2: Run appropriate diversity method
         if (diversity_options?.amplicon_type == "ITS" || diversity_options?.database == "unite") {
             diversity_results = WF_DIVERSITY_CORE_METRICS(
                 feature_table,
@@ -34,11 +41,7 @@ workflow DIVERSITY {
                 sampling_depth_ch,
                 [id: "diversity_analysis"],
             )
-            rarefied_table_ch = diversity_results.rarefied_table
-            jaccard_emperor_ch = diversity_results.jaccard_emperor
-            bray_curtis_emperor_ch = diversity_results.bray_curtis_emperor
-        }
-        else {
+        } else {
             diversity_results = WF_DIVERSITY_CORE_METRICS_PHYLOGENETIC(
                 feature_table,
                 rooted_tree,
@@ -46,41 +49,11 @@ workflow DIVERSITY {
                 sampling_depth_ch,
                 [id: "diversity_analysis"],
             )
-            rarefied_table_ch = diversity_results.rarefied_table
-            jaccard_emperor_ch = diversity_results.jaccard_emperor
-            bray_curtis_emperor_ch = diversity_results.bray_curtis_emperor
         }
-    } else {
-        // Auto-infer sampling depth from the feature table
-        def percentile = diversity_options?.auto_depth_percentile ?: 0.0
-        inferred = WF_INFER_SAMPLING_DEPTH(feature_table, percentile)
-        sampling_depth_ch = inferred.sampling_depth_file
-            .map { it.text.trim().toInteger() }
-            .first()
 
-        if (diversity_options?.amplicon_type == "ITS" || diversity_options?.database == "unite") {
-            diversity_results = WF_DIVERSITY_CORE_METRICS(
-                feature_table,
-                metadata_file,
-                sampling_depth_ch,
-                [id: "diversity_analysis"],
-            )
-            rarefied_table_ch = diversity_results.rarefied_table
-            jaccard_emperor_ch = diversity_results.jaccard_emperor
-            bray_curtis_emperor_ch = diversity_results.bray_curtis_emperor
-        }
-        else {
-            diversity_results = WF_DIVERSITY_CORE_METRICS_PHYLOGENETIC(
-                feature_table,
-                rooted_tree,
-                metadata_file,
-                sampling_depth_ch,
-                [id: "diversity_analysis"],
-            )
-            rarefied_table_ch = diversity_results.rarefied_table
-            jaccard_emperor_ch = diversity_results.jaccard_emperor
-            bray_curtis_emperor_ch = diversity_results.bray_curtis_emperor
-        }
+        rarefied_table_ch = diversity_results.rarefied_table
+        jaccard_emperor_ch = diversity_results.jaccard_emperor
+        bray_curtis_emperor_ch = diversity_results.bray_curtis_emperor
     }
 
     emit:
