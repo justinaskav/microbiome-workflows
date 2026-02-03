@@ -8,6 +8,7 @@ nextflow.enable.dsl = 2
 include { DADA2 } from '../subworkflows/dada2_wf.nf'
 include { FILTERING } from '../subworkflows/filtering_wf.nf'
 include { TAXONOMY } from '../subworkflows/taxonomy_wf.nf'
+include { PICRUST2 } from '../subworkflows/picrust2_wf.nf'
 include { PHYLOGENY } from '../subworkflows/phylogeny_wf.nf'
 include { DIVERSITY } from '../subworkflows/diversity_wf.nf'
 
@@ -43,10 +44,23 @@ workflow AMPLICON_POST_TRIM {
         taxonomy_options
     )
 
-    // Step 4: Phylogeny
+    // Step 4: PICRUSt2 Functional Prediction
+    picrust2_options = [
+        threads: other_options?.picrust2_threads,
+        diversity_sampling_depth: other_options?.picrust2_diversity_sampling_depth,
+    ]
+
+    picrust2_results = PICRUST2(
+        filtering_results.filtered_feature_table,
+        filtering_results.filtered_rep_seqs,
+        metadata_file,
+        picrust2_options
+    )
+
+    // Step 5: Phylogeny
     phylogeny_results = PHYLOGENY(filtering_results.filtered_rep_seqs)
 
-    // Step 5: Diversity Analysis (optional)
+    // Step 6: Diversity Analysis (optional)
     diversity_options = [
         sampling_depth: other_options?.diversity_sampling_depth,
         amplicon_type: other_options?.amplicon_type,
@@ -78,6 +92,14 @@ workflow AMPLICON_POST_TRIM {
     taxonomy_evaluation = taxonomy_results.taxonomy_evaluation
     taxonomy_comparison = taxonomy_results.taxonomy_comparison
     gram_staining_evaluation = taxonomy_results.gram_staining_evaluation
+
+    // PICRUSt2 results
+    picrust2_ko_metagenome = picrust2_results.ko_metagenome
+    picrust2_ec_metagenome = picrust2_results.ec_metagenome
+    picrust2_pathway_abundance = picrust2_results.pathway_abundance
+    picrust2_pathway_summary = picrust2_results.pathway_summary
+    picrust2_pathway_jaccard_emperor = picrust2_results.pathway_jaccard_emperor
+    picrust2_pathway_bray_curtis_emperor = picrust2_results.pathway_bray_curtis_emperor
 
     // Phylogeny results
     phylogeny_rooted = phylogeny_results.rooted_tree
