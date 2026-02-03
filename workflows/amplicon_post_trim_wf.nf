@@ -44,18 +44,40 @@ workflow AMPLICON_POST_TRIM {
         taxonomy_options
     )
 
-    // Step 4: PICRUSt2 Functional Prediction
-    picrust2_options = [
-        threads: other_options?.picrust2_threads,
-        diversity_sampling_depth: other_options?.picrust2_diversity_sampling_depth,
-    ]
+    // Step 4: PICRUSt2 Functional Prediction (skipped for ITS)
+    if (other_options?.skip_picrust2) {
+        picrust2_ko_metagenome_ch = Channel.empty()
+        picrust2_ec_metagenome_ch = Channel.empty()
+        picrust2_pathway_abundance_ch = Channel.empty()
+        picrust2_ko_summary_ch = Channel.empty()
+        picrust2_ec_summary_ch = Channel.empty()
+        picrust2_pathway_summary_ch = Channel.empty()
+        picrust2_pathway_jaccard_emperor_ch = Channel.empty()
+        picrust2_pathway_bray_curtis_emperor_ch = Channel.empty()
+    } else {
+        picrust2_options = [
+            threads: other_options?.picrust2_threads,
+            diversity_sampling_depth: other_options?.picrust2_diversity_sampling_depth,
+            skip_pathway_diversity: other_options?.skip_picrust2_diversity ?: false,
+            auto_depth_percentile: other_options?.auto_depth_percentile ?: 0.0,
+        ]
 
-    picrust2_results = PICRUST2(
-        filtering_results.filtered_feature_table,
-        filtering_results.filtered_rep_seqs,
-        metadata_file,
-        picrust2_options
-    )
+        picrust2_results = PICRUST2(
+            filtering_results.filtered_feature_table,
+            filtering_results.filtered_rep_seqs,
+            metadata_file,
+            picrust2_options
+        )
+
+        picrust2_ko_metagenome_ch = picrust2_results.ko_metagenome
+        picrust2_ec_metagenome_ch = picrust2_results.ec_metagenome
+        picrust2_pathway_abundance_ch = picrust2_results.pathway_abundance
+        picrust2_ko_summary_ch = picrust2_results.ko_summary
+        picrust2_ec_summary_ch = picrust2_results.ec_summary
+        picrust2_pathway_summary_ch = picrust2_results.pathway_summary
+        picrust2_pathway_jaccard_emperor_ch = picrust2_results.pathway_jaccard_emperor
+        picrust2_pathway_bray_curtis_emperor_ch = picrust2_results.pathway_bray_curtis_emperor
+    }
 
     // Step 5: Phylogeny
     phylogeny_results = PHYLOGENY(filtering_results.filtered_rep_seqs)
@@ -65,6 +87,8 @@ workflow AMPLICON_POST_TRIM {
         sampling_depth: other_options?.diversity_sampling_depth,
         amplicon_type: other_options?.amplicon_type,
         database: other_options?.database,
+        skip: other_options?.skip_diversity ?: false,
+        auto_depth_percentile: other_options?.auto_depth_percentile ?: 0.0,
     ]
 
     diversity_results = DIVERSITY(
@@ -94,12 +118,14 @@ workflow AMPLICON_POST_TRIM {
     gram_staining_evaluation = taxonomy_results.gram_staining_evaluation
 
     // PICRUSt2 results
-    picrust2_ko_metagenome = picrust2_results.ko_metagenome
-    picrust2_ec_metagenome = picrust2_results.ec_metagenome
-    picrust2_pathway_abundance = picrust2_results.pathway_abundance
-    picrust2_pathway_summary = picrust2_results.pathway_summary
-    picrust2_pathway_jaccard_emperor = picrust2_results.pathway_jaccard_emperor
-    picrust2_pathway_bray_curtis_emperor = picrust2_results.pathway_bray_curtis_emperor
+    picrust2_ko_metagenome = picrust2_ko_metagenome_ch
+    picrust2_ec_metagenome = picrust2_ec_metagenome_ch
+    picrust2_pathway_abundance = picrust2_pathway_abundance_ch
+    picrust2_ko_summary = picrust2_ko_summary_ch
+    picrust2_ec_summary = picrust2_ec_summary_ch
+    picrust2_pathway_summary = picrust2_pathway_summary_ch
+    picrust2_pathway_jaccard_emperor = picrust2_pathway_jaccard_emperor_ch
+    picrust2_pathway_bray_curtis_emperor = picrust2_pathway_bray_curtis_emperor_ch
 
     // Phylogeny results
     phylogeny_rooted = phylogeny_results.rooted_tree
