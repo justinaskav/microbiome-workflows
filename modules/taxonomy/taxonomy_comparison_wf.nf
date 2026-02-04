@@ -9,8 +9,8 @@ process COMPARE_TAXONOMIES {
     conda "${params.qiime2_conda_env}" // Uses the QIIME2 environment
 
     input:
-    path taxonomy1       // First taxonomy artifact (.qza)
-    path taxonomy2       // Second taxonomy artifact (.qza)
+    path taxonomy1, stageAs: 'taxonomy1.qza'  // First taxonomy artifact (.qza)
+    path taxonomy2, stageAs: 'taxonomy2.qza'  // Second taxonomy artifact (.qza)
     val taxonomy1_name   // Name for first taxonomy
     val taxonomy2_name   // Name for second taxonomy
 
@@ -21,8 +21,8 @@ process COMPARE_TAXONOMIES {
     """
     # Run comparison script with python to ensure it works
     qiime jk visualize-taxonomy-comparison \\
-        --i-tax1 ${taxonomy1} \\
-        --i-tax2 ${taxonomy2} \\
+        --i-tax1 taxonomy1.qza \\
+        --i-tax2 taxonomy2.qza \\
         --o-visualization comparison_results.qzv \\
         --p-tax1-name "${taxonomy1_name}" \\
         --p-tax2-name "${taxonomy2_name}" \\

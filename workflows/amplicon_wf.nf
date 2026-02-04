@@ -68,11 +68,13 @@ workflow AMPLICON_WORKFLOW {
     dada2_results = DADA2(sequences_for_dada2, dada2_options)
 
     // Step 5: Filtering (metadata filtering + decontamination)
+    // Pass classifier for contaminant taxonomy classification
     filtering_results = FILTERING(
         dada2_results.feature_table,
         dada2_results.rep_seqs,
         metadata_to_use,
-        decontam_options
+        decontam_options,
+        database_ch_list.classifier
     )
 
     // Step 6: Taxonomy Classification
@@ -153,10 +155,11 @@ workflow AMPLICON_WORKFLOW {
     dada2_base_transition_stats_summary = dada2_results.base_transition_stats
 
     // Filtering/Decontam results
-    decontam_scores_freq = filtering_results.decontam_scores
-    decontam_scores_freq_viz = filtering_results.decontam_scores_viz
-    decontam_scores_prev = Channel.empty()  // Simplified - using single channel for both methods
-    decontam_scores_prev_viz = Channel.empty()
+    decontam_scores = filtering_results.decontam_scores
+    decontam_scores_viz = filtering_results.decontam_scores_viz
+    contaminant_table = filtering_results.contaminant_table
+    contaminant_seqs = filtering_results.contaminant_seqs
+    contaminant_taxonomy = filtering_results.contaminant_taxonomy
 
     // Taxonomy results
     taxonomy = taxonomy_results.taxonomy

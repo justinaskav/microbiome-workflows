@@ -23,8 +23,10 @@ process COLLECT_TRIMMED_READS {
 }
 
 // Merge metadata files from multiple batches
+// Handles QIIME2 format with #q2:types row and aligns columns by name
 process MERGE_METADATA {
     tag "Merge metadata"
+    conda "conda-forge::pandas"
 
     input:
     path metadata_files, stageAs: "metadata_*.tsv"
@@ -34,13 +36,33 @@ process MERGE_METADATA {
 
     script:
     """
-    # QIIME2 metadata has 2 header lines: column names and #q2:types directive
-    # Take both header lines from first file, then data from all files (skipping both headers)
-    first_file=\$(ls metadata_*.tsv | head -1)
-    head -2 "\$first_file" > merged_metadata.tsv
-    for f in metadata_*.tsv; do
-        tail -n +3 "\$f" >> merged_metadata.tsv
-    done
+    #!/usr/bin/env python3
+    import pandas as pd
+    from pathlib import Path
+
+    files = sorted(Path('.').glob('metadata_*.tsv'))
+    dfs = []
+
+    for f in files:
+        # Read TSV, skip comment lines starting with #
+        df = pd.read_csv(f, sep='\\t', comment='#', dtype=str)
+        dfs.append(df)
+
+    # Merge all dataframes, aligning by column name
+    merged = pd.concat(dfs, ignore_index=True)
+
+    # Fill missing DecontaminationStatus with 'No' (for batches without controls)
+    if 'DecontaminationStatus' in merged.columns:
+        merged['DecontaminationStatus'] = merged['DecontaminationStatus'].fillna('No')
+
+    # Write output with QIIME2 types row
+    cols = merged.columns.tolist()
+    types = ['categorical'] * len(cols)
+
+    with open('merged_metadata.tsv', 'w') as out:
+        out.write('\\t'.join(cols) + '\\n')
+        out.write('#q2:types\\t' + '\\t'.join(types[1:]) + '\\n')
+        merged.to_csv(out, sep='\\t', index=False, header=False)
     """
 }
 
