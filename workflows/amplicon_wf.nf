@@ -13,6 +13,7 @@ include { TAXONOMY } from '../subworkflows/taxonomy_wf.nf'
 include { PICRUST2 } from '../subworkflows/picrust2_wf.nf'
 include { PHYLOGENY } from '../subworkflows/phylogeny_wf.nf'
 include { DIVERSITY } from '../subworkflows/diversity_wf.nf'
+include { WF_FILTER_SAMPLES_PRE_DADA2 } from '../modules/data_processing/filter_samples_pre_dada2_wf.nf'
 
 // Main amplicon workflow
 workflow AMPLICON_WORKFLOW {
@@ -62,6 +63,15 @@ workflow AMPLICON_WORKFLOW {
         sequences_for_dada2 = input_processing_results.read_pairs_ch
         fastqc_after_cutadapt = Channel.empty()
         multiqc_after_cutadapt = Channel.empty()
+    }
+
+    // Step 3.5: Pre-DADA2 sample filtering (optional)
+    if (other_options?.filter_samples_by_metadata) {
+        pre_filter_results = WF_FILTER_SAMPLES_PRE_DADA2(
+            sequences_for_dada2,
+            metadata_to_use,
+        )
+        sequences_for_dada2 = pre_filter_results.filtered_reads
     }
 
     // Step 4: DADA2 Denoising
