@@ -84,7 +84,6 @@ process TRIM_POLYG_SEQUENCES {
     qiime cutadapt trim-paired \
       --i-demultiplexed-sequences ${trimmedArtifact} \
       --p-cores ${cores} \
-      --p-adapter-f ${polyg_adapter} \
       --p-adapter-r ${polyg_adapter} \
       --p-minimum-length ${minimum_length} \
       --o-trimmed-sequences ${sampleId}_polyg_trimmed.qza \
@@ -218,11 +217,10 @@ process TRIM_MERGED_CUTADAPT {
       --o-trimmed-sequences primer_trimmed.qza \
       --verbose
 
-    # Apply poly-G trimming
+    # Apply poly-G trimming (R2 only, where the artifact occurs on two-color instruments)
     qiime cutadapt trim-paired \
       --i-demultiplexed-sequences primer_trimmed.qza \
       --p-cores ${cores} \
-      --p-adapter-f ${polyg_adapter} \
       --p-adapter-r ${polyg_adapter} \
       --p-minimum-length ${minimum_length} \
       --o-trimmed-sequences trimmed_sequences.qza \
