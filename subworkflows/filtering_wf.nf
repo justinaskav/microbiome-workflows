@@ -20,9 +20,9 @@ workflow FILTERING {
 
     decontam_config = [
         method: decontam_options?.method ?: params.decontam?.method ?: "none",
-        freq_concentration_column: decontam_options?.freq_concentration_column ?: params.decontam?.freq_concentration_column,
-        prev_control_column: decontam_options?.prev_control_column ?: params.decontam?.prev_control_column,
-        prev_control_indicator: decontam_options?.prev_control_indicator ?: params.decontam?.prev_control_indicator,
+        freq_concentration_column: decontam_options?.freq_concentration_column ?: params.decontam?.freq_concentration_column ?: null,
+        prev_control_column: decontam_options?.prev_control_column ?: params.decontam?.prev_control_column ?: null,
+        prev_control_indicator: decontam_options?.prev_control_indicator ?: params.decontam?.prev_control_indicator ?: null,
         threshold: decontam_options?.threshold ?: params.decontam?.threshold ?: 0.1,
     ]
 
