@@ -64,8 +64,11 @@ process RUN_DADA2_PAIRED_END_QIIME2 {
     val trunc_len_r
     val trim_left_f
     val trim_left_r
+    val max_ee_f
+    val max_ee_r
     val n_reads_learn
     val dada2_n_threads // Explicitly pass desired threads for DADA2 tool
+    val binned_quality_scores // List of binned quality scores, or null
 
     output:
     path("table.qza"), emit: feature_table_qza
@@ -76,6 +79,7 @@ process RUN_DADA2_PAIRED_END_QIIME2 {
     script:
     // Use dada2_n_threads if provided, else default to task.cpus, or 1 if task.cpus is 0
     def threads_to_use = dada2_n_threads ?: (task.cpus > 0 ? task.cpus : 1)
+    def binned_qs_args = binned_quality_scores ? binned_quality_scores.collect { "--p-binned-quality-scores ${it}" }.join(' \\\n        ') : ''
 
     """
     qiime dada2 denoise-paired \\
@@ -84,8 +88,11 @@ process RUN_DADA2_PAIRED_END_QIIME2 {
         --p-trunc-len-r ${trunc_len_r} \\
         --p-trim-left-f ${trim_left_f} \\
         --p-trim-left-r ${trim_left_r} \\
+        --p-max-ee-f ${max_ee_f} \\
+        --p-max-ee-r ${max_ee_r} \\
         --p-n-reads-learn ${n_reads_learn} \\
         --p-n-threads ${threads_to_use} \\
+        ${binned_qs_args} \\
         --o-table table.qza \\
         --o-representative-sequences rep-seqs.qza \\
         --o-denoising-stats denoising-stats.qza \\
@@ -163,9 +170,12 @@ workflow WF_DENOISE_DADA2 {
         dada2_trunc_len_r
         dada2_trim_left_f
         dada2_trim_left_r
+        dada2_max_ee_f
+        dada2_max_ee_r
         dada2_n_reads_learn
         dada2_n_threads
         sample_prefix_to_remove // Optional prefix to remove from sample IDs
+        dada2_binned_quality_scores // Optional list of binned quality scores
 
     main:
         // 1. Prepare manifest from read_pairs_ch
@@ -186,8 +196,11 @@ workflow WF_DENOISE_DADA2 {
             dada2_trunc_len_r,
             dada2_trim_left_f,
             dada2_trim_left_r,
+            dada2_max_ee_f,
+            dada2_max_ee_r,
             dada2_n_reads_learn,
-            dada2_n_threads
+            dada2_n_threads,
+            dada2_binned_quality_scores
         )
         dada2_results_ch = RUN_DADA2_PAIRED_END_QIIME2.out
 

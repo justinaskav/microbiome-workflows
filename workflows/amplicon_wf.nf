@@ -8,6 +8,7 @@ include { INPUT_PROCESSING } from '../subworkflows/input_processing_wf.nf'
 include { QC } from '../subworkflows/qc_wf.nf'
 include { TRIMMING } from '../subworkflows/trimming_wf.nf'
 include { DADA2 } from '../subworkflows/dada2_wf.nf'
+include { DEBLUR } from '../subworkflows/deblur_wf.nf'
 include { FILTERING } from '../subworkflows/filtering_wf.nf'
 include { TAXONOMY } from '../subworkflows/taxonomy_wf.nf'
 include { PICRUST2 } from '../subworkflows/picrust2_wf.nf'
@@ -74,14 +75,26 @@ workflow AMPLICON_WORKFLOW {
         sequences_for_dada2 = pre_filter_results.filtered_reads
     }
 
-    // Step 4: DADA2 Denoising
-    dada2_results = DADA2(sequences_for_dada2, dada2_options)
+    // Step 4: Denoising (DADA2 or Deblur based on config)
+    def denoising_method = other_options?.denoising_method ?: 'dada2'
+
+    if (denoising_method == 'deblur') {
+        denoising_results = DEBLUR(
+            sequences_for_dada2,
+            other_options.deblur,
+            database_ch_list.deblur_ref_seqs ?: Channel.empty(),
+        )
+        denoising_base_transition_ch = Channel.empty()
+    } else {
+        denoising_results = DADA2(sequences_for_dada2, dada2_options)
+        denoising_base_transition_ch = denoising_results.base_transition_stats
+    }
 
     // Step 5: Filtering (metadata filtering + decontamination)
     // Pass classifier for contaminant taxonomy classification
     filtering_results = FILTERING(
-        dada2_results.feature_table,
-        dada2_results.rep_seqs,
+        denoising_results.feature_table,
+        denoising_results.rep_seqs,
         metadata_to_use,
         decontam_options,
         database_ch_list.classifier
@@ -157,12 +170,12 @@ workflow AMPLICON_WORKFLOW {
     fastqc_results_after_cutadapt = fastqc_after_cutadapt
     multiqc_report_after_cutadapt = multiqc_after_cutadapt
 
-    // DADA2 results
-    dada2_denoising_stats = dada2_results.denoising_stats
-    dada2_ft_summary = dada2_results.feature_table_summary
-    dada2_rep_seqs_summary = dada2_results.rep_seqs_summary
-    dada2_denoising_stats_summary = dada2_results.denoising_stats_summary
-    dada2_base_transition_stats_summary = dada2_results.base_transition_stats
+    // Denoising results (DADA2 or Deblur)
+    dada2_denoising_stats = denoising_results.denoising_stats
+    dada2_ft_summary = denoising_results.feature_table_summary
+    dada2_rep_seqs_summary = denoising_results.rep_seqs_summary
+    dada2_denoising_stats_summary = denoising_results.denoising_stats_summary
+    dada2_base_transition_stats_summary = denoising_base_transition_ch
 
     // Filtering/Decontam results
     decontam_scores = filtering_results.decontam_scores

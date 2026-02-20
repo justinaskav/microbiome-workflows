@@ -68,7 +68,8 @@ workflow PICRUST2 {
         } else {
             inferred = WF_INFER_PATHWAY_DEPTH(
                 picrust2_results.pathway_abundance,
-                picrust2_config.auto_depth_percentile
+                picrust2_config.auto_depth_percentile,
+                metadata_file
             )
             sampling_depth_ch = inferred.sampling_depth_file
                 .map { it.text.trim().toInteger() }

@@ -150,6 +150,7 @@ workflow CREATE_SILVA_CLASSIFIER {
     emit:
     classifier = result.classifier
     evaluation = result.evaluation
+    ref_seqs   = result.processed_sequences.map { _meta, seqs -> seqs }
 }
 
 workflow CREATE_UNITE_CLASSIFIER {

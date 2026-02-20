@@ -27,7 +27,7 @@ workflow DIVERSITY {
             sampling_depth_ch = Channel.value(diversity_options.sampling_depth)
         } else {
             def percentile = diversity_options?.auto_depth_percentile ?: 0.0
-            inferred = WF_INFER_SAMPLING_DEPTH(feature_table, percentile)
+            inferred = WF_INFER_SAMPLING_DEPTH(feature_table, percentile, metadata_file)
             sampling_depth_ch = inferred.sampling_depth_file
                 .map { it.text.trim().toInteger() }
                 .first()

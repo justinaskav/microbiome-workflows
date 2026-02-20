@@ -18,7 +18,6 @@ workflow TRIMMING {
     trimming_config = [
         enabled: trimming_options.enabled ?: true,
         use_sampleseq: trimming_options.use_sampleseq ?: false,
-        skip_polyg_trim: trimming_options.skip_polyg_trim ?: false,
     ]
 
     if (trimming_config.enabled) {

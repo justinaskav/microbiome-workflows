@@ -17,9 +17,12 @@ workflow DADA2 {
         trunc_len_r: dada2_options.trunc_len_r,
         trim_left_f: dada2_options.trim_left_f ?: 0,
         trim_left_r: dada2_options.trim_left_r ?: 0,
+        max_ee_f: dada2_options.max_ee_f ?: 2,
+        max_ee_r: dada2_options.max_ee_r ?: 2,
         n_reads_learn: dada2_options.n_reads_learn ?: params.dada2?.n_reads_learn ?: 1000000,
         n_threads: dada2_options.n_threads ?: params.dada2?.n_threads ?: 8,
         sample_prefix_to_remove: dada2_options.sample_prefix_to_remove ?: params.dada2?.sample_prefix_to_remove,
+        binned_quality_scores: dada2_options.binned_quality_scores ?: params.dada2?.binned_quality_scores ?: null,
     ]
 
     dada2_output_ch = WF_DENOISE_DADA2(
@@ -28,9 +31,12 @@ workflow DADA2 {
         dada2_config.trunc_len_r,
         dada2_config.trim_left_f,
         dada2_config.trim_left_r,
+        dada2_config.max_ee_f,
+        dada2_config.max_ee_r,
         dada2_config.n_reads_learn,
         dada2_config.n_threads,
         dada2_config.sample_prefix_to_remove,
+        dada2_config.binned_quality_scores,
     )
 
     emit:

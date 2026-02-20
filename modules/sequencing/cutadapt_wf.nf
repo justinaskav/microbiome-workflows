@@ -14,18 +14,14 @@ process IMPORT_READS_TO_QZA {
 
     script:
     """
-    # Create directory for CasavaOneEightSingleLanePerSampleDirFmt
-    mkdir -p ${sampleId}_casava_import
-    
-    # Rename reads to match Casava format expected by QIIME2
-    cp -L ${reads[0]} ${sampleId}_casava_import/${sampleId}_01_L001_R1_001.fastq.gz
-    cp -L ${reads[1]} ${sampleId}_casava_import/${sampleId}_01_L001_R2_001.fastq.gz
-    
-    # Import as QIIME2 artifact
+    # Create manifest file for this sample (avoids Casava filename requirements)
+    printf 'sample-id\\tforward-absolute-filepath\\treverse-absolute-filepath\\n' > manifest.tsv
+    printf '%s\\t%s\\t%s\\n' '${sampleId}' "\$(readlink -f ${reads[0]})" "\$(readlink -f ${reads[1]})" >> manifest.tsv
+
     qiime tools import \
       --type 'SampleData[PairedEndSequencesWithQuality]' \
-      --input-path ${sampleId}_casava_import \
-      --input-format CasavaOneEightSingleLanePerSampleDirFmt \
+      --input-path manifest.tsv \
+      --input-format PairedEndFastqManifestPhred33V2 \
       --output-path ${sampleId}_demux.qza
     """
 }
@@ -46,9 +42,10 @@ process TRIM_CUTADAPT {
     def discard_untrimmed = true
     def minimum_length = params.cutadapt?.minimum_length ?: 100
     def cores = task.cpus > 0 ? task.cpus : 1
-
     def forw_read_5 = "${barcode_f}${primer_f}"
     def rev_read_5 = "${barcode_r}${primer_r}"
+    def nextseq_trim = params.cutadapt?.nextseq_trim
+    def nextseq_arg = nextseq_trim != null ? "--p-nextseq-trim ${nextseq_trim}" : ''
 
     """
     qiime cutadapt trim-paired \
@@ -58,35 +55,8 @@ process TRIM_CUTADAPT {
       --p-front-r ${rev_read_5} \
       --p-minimum-length ${minimum_length} \
       --p-discard-untrimmed \
+      ${nextseq_arg} \
       --o-trimmed-sequences ${sampleId}_trimmed.qza \
-      --verbose
-    """
-}
-
-process TRIM_POLYG_SEQUENCES {
-    tag "Trim polyG ${sampleId}"
-    cpus params.cutadapt?.cpus ?: 4
-
-    conda params.qiime2_conda_env
-
-    input:
-    tuple val(sampleId), path(trimmedArtifact)
-
-    output:
-    tuple val(sampleId), path("${sampleId}_polyg_trimmed.qza"), emit: polyg_trimmed_artifact
-
-    script:
-    def minimum_length = params.cutadapt?.minimum_length ?: 100
-    def polyg_adapter = params.cutadapt?.polyg_adapter ?: 'GGGGGGGG'
-    def cores = task.cpus > 0 ? task.cpus : 1
-
-    """
-    qiime cutadapt trim-paired \
-      --i-demultiplexed-sequences ${trimmedArtifact} \
-      --p-cores ${cores} \
-      --p-adapter-r ${polyg_adapter} \
-      --p-minimum-length ${minimum_length} \
-      --o-trimmed-sequences ${sampleId}_polyg_trimmed.qza \
       --verbose
     """
 }
@@ -146,42 +116,34 @@ process IMPORT_FASTQS_TO_QIIME2 {
     conda params.qiime2_conda_env
 
     input:
-    path "*"
+    val read_pair_list // List of [sample_id, [r1_path, r2_path]]
 
     output:
     path "sequences.qza", emit: sequences
     path "sequences_summary.qzv", emit: sequences_summary
 
     script:
+    def manifest_lines = ["sample-id\tforward-absolute-filepath\treverse-absolute-filepath"]
+    read_pair_list.each { item ->
+        def sample_id = item[0].toString()
+        def fwd_path = new File(item[1][0].toString()).getAbsolutePath()
+        def rev_path = new File(item[1][1].toString()).getAbsolutePath()
+        manifest_lines.add("${sample_id}\t${fwd_path}\t${rev_path}")
+    }
     """
-    # Import all files into a single artifact
+    printf '%s\\n' '${manifest_lines.join('\n')}' > manifest.tsv
+
+    # Import all samples via manifest (avoids Casava filename requirements)
     qiime tools import \
       --type 'SampleData[PairedEndSequencesWithQuality]' \
-      --input-path . \
-      --input-format CasavaOneEightSingleLanePerSampleDirFmt \
+      --input-path manifest.tsv \
+      --input-format PairedEndFastqManifestPhred33V2 \
       --output-path sequences.qza
-    
+
     # Summarize the sequences
     qiime demux summarize \
       --i-data sequences.qza \
       --o-visualization sequences_summary.qzv
-    """
-}
-
-process STAGE_FASTQS_FOR_IMPORT {
-    tag "Stage fastq files for bulk import"
-
-    input:
-    tuple val(sample_id), path(reads)
-
-    output:
-    tuple path("staged_${sample_id}_L001_R1_001.fastq.gz"), path("staged_${sample_id}_L001_R2_001.fastq.gz")
-
-    script:
-    """
-    # Create symbolic links with staged prefix to avoid name conflicts
-    ln -sf ${reads[0]} staged_${sample_id}_L001_R1_001.fastq.gz
-    ln -sf ${reads[1]} staged_${sample_id}_L001_R2_001.fastq.gz
     """
 }
 
@@ -202,31 +164,24 @@ process TRIM_MERGED_CUTADAPT {
 
     script:
     def minimum_length = params.cutadapt?.minimum_length ?: 100
-    def polyg_adapter = params.cutadapt?.polyg_adapter ?: 'GGGGGGGG'
     def cores = task.cpus > 0 ? task.cpus : 1
+    def nextseq_trim = params.cutadapt?.nextseq_trim
+    def nextseq_arg = nextseq_trim != null ? "--p-nextseq-trim ${nextseq_trim}" : ''
+    def has_primers = primer_f != null && primer_f.toString() != '' && primer_f.toString() != 'null'
+    def primer_args = has_primers
+        ? "--p-front-f ${primer_f} --p-front-r ${primer_r} --p-discard-untrimmed"
+        : ''
 
     """
-    # Apply primer trimming to all sequences at once
     qiime cutadapt trim-paired \
       --i-demultiplexed-sequences ${merged_sequences} \
       --p-cores ${cores} \
-      --p-front-f ${primer_f} \
-      --p-front-r ${primer_r} \
-      --p-minimum-length ${minimum_length} \
-      --p-discard-untrimmed \
-      --o-trimmed-sequences primer_trimmed.qza \
-      --verbose
-
-    # Apply poly-G trimming (R2 only, where the artifact occurs on two-color instruments)
-    qiime cutadapt trim-paired \
-      --i-demultiplexed-sequences primer_trimmed.qza \
-      --p-cores ${cores} \
-      --p-adapter-r ${polyg_adapter} \
+      ${primer_args} \
+      ${nextseq_arg} \
       --p-minimum-length ${minimum_length} \
       --o-trimmed-sequences trimmed_sequences.qza \
       --verbose
 
-    # Summarize the final trimmed sequences
     qiime demux summarize \
       --i-data trimmed_sequences.qza \
       --o-visualization trimmed_sequences_summary.qzv
@@ -238,7 +193,7 @@ workflow WF_CUTADAPT {
     take:
     read_pairs_ch // Channel with sample ID and read pairs
     barcode_primer_info_ch // Channel with barcode/primer info
-    trimming_config // Trimming options (skip_polyg_trim, primer_f, primer_r)
+    trimming_config // Trimming options (enabled, use_sampleseq)
     primers
 
     main:
@@ -304,49 +259,34 @@ workflow WF_CUTADAPT {
                 ]
             }
 
-            // Run cutadapt for each sample
+            // Run cutadapt for each sample (primers + optional nextseq-trim in one pass)
             trimmed_artifacts_ch = TRIM_CUTADAPT(
                 trimming_input_ch
             )
 
-            if (trimming_config.skip_polyg_trim) {
-                // If polyG trimming is skipped, just use the trimmed artifacts as they are
-                polyg_trimmed_artifacts_ch = trimmed_artifacts_ch
-            }
-            else {
-                // Run polyG trimming on the already trimmed sequences
-                polyg_trimmed_artifacts_ch = TRIM_POLYG_SEQUENCES(trimmed_artifacts_ch)
-            }
+            // Export trimmed sequences to fastq
+            exported_fastqs_ch = EXPORT_QIIME2_SEQUENCES(trimmed_artifacts_ch)
 
-            // Export polyA-trimmed sequences to fastq
-            exported_fastqs_ch = EXPORT_QIIME2_SEQUENCES(polyg_trimmed_artifacts_ch)
-
-            // Merge all polyG-trimmed sequences into a single artifact
+            // Merge all trimmed sequences into a single artifact
             merged_results_ch = IMPORT_FASTQS_TO_QIIME2(
-                exported_fastqs_ch.map { sample_id, r1, r2 -> [r1, r2] }.flatten().collect()
+                exported_fastqs_ch.map { sample_id, r1, r2 -> [sample_id, [r1, r2]] }.collect(flat: false)
             )
 
             trimmed_sequences = merged_results_ch.sequences
             trimmed_sequences_summary = merged_results_ch.sequences_summary
-            individual_trimmed = polyg_trimmed_artifacts_ch[1]
+            individual_trimmed = trimmed_artifacts_ch[1]
         }
-        else if (primers.forward != null && primers.reverse != null) {
-            // OPTIMIZED PATH: Direct import → cutadapt → DADA2 for same primers
-            // This is used when primers are explicitly provided
-            // Collect all paired files for import
-            all_fastqs_ch = read_pairs_ch
-                .map { sample_name, files -> files }
-                .flatten()
-                .collect()
+        else if (primers.forward != null || params.cutadapt?.nextseq_trim != null) {
+            // OPTIMIZED PATH: Direct import → single cutadapt call → DADA2
+            // Handles: primers only, nextseq-trim only, or both combined
+            // Import all sequences at once via manifest
+            import_results = IMPORT_FASTQS_TO_QIIME2(read_pairs_ch.collect(flat: false))
 
-            // Import all sequences at once
-            import_results = IMPORT_FASTQS_TO_QIIME2(all_fastqs_ch)
-
-            // Apply cutadapt with primers to merged sequences
+            // Apply cutadapt (optional primers + optional nextseq-trim) in a single pass
             trim_results = TRIM_MERGED_CUTADAPT(
                 import_results.sequences,
-                primers.forward,
-                primers.reverse,
+                primers.forward ?: null,
+                primers.reverse ?: null,
             )
 
             exported_fastqs_ch = EXPORT_QIIME2_ARTIFACT(
@@ -367,13 +307,8 @@ workflow WF_CUTADAPT {
             individual_trimmed = Channel.empty()
         }
     } else {
-        // No trimming - just import and summarize
-        all_fastqs_ch = read_pairs_ch
-            .map { sample_name, files -> files }
-            .flatten()
-            .collect()
-
-        import_results = IMPORT_FASTQS_TO_QIIME2(all_fastqs_ch)
+        // No trimming - just import and summarize via manifest
+        import_results = IMPORT_FASTQS_TO_QIIME2(read_pairs_ch.collect(flat: false))
 
         trimmed_sequences = import_results.sequences
         trimmed_sequences_summary = import_results.sequences_summary
