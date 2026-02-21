@@ -115,7 +115,7 @@ process IMPORT_FASTQS_TO_QIIME2 {
     conda params.qiime2_conda_env
 
     input:
-    val read_pair_list // List of [sample_id, [r1_path, r2_path]]
+    val read_pair_list
 
     output:
     path "sequences.qza", emit: sequences
@@ -192,33 +192,31 @@ workflow WF_CUTADAPT {
     take:
     read_pairs_ch // Channel with sample ID and read pairs
     barcode_primer_info_ch // Channel with barcode/primer info
-    trimming_config // Trimming options (enabled, use_sampleseq)
-    primers
+    use_sampleseq // Boolean: whether to use per-sample barcode/primer processing
+    nextseq_trim // Optional integer for nextseq-trim
+    primer_forward // Forward primer sequence (or null)
+    primer_reverse // Reverse primer sequence (or null)
 
     main:
 
-    if (trimming_config.enabled) {
+    if (use_sampleseq) {
+        // TRADITIONAL PATH: Individual sample processing for barcoded data
+        // This is used when barcode_primer_info is provided
 
-        if (trimming_config.use_sampleseq) {
-            // TRADITIONAL PATH: Individual sample processing for barcoded data
-            // This is used when barcode_primer_info is provided
+        // Import sequences for each sample into QIIME2 format
+        demux_artifacts_ch = IMPORT_READS_TO_QZA(read_pairs_ch)
 
-            // Import sequences for each sample into QIIME2 format
-            demux_artifacts_ch = IMPORT_READS_TO_QZA(read_pairs_ch)
-
-            // Create a channel with barcode/primer info for each sample
-            barcode_primer_info_ch
-                .splitCsv(header: true, sep: '\t')
-                .map { row ->
-                    [row.SampleID, row.Barcode_F, row.Barcode_R, row.Primer_F, row.Primer_R]
-                }
-                .set { sample_info_ch }
+        // Create a channel with barcode/primer info for each sample
+        barcode_primer_info_ch
+            .splitCsv(header: true, sep: '\t')
+            .map { row ->
+                [row.SampleID, row.Barcode_F, row.Barcode_R, row.Primer_F, row.Primer_R]
+            }
+            .set { sample_info_ch }
 
             // Prepare demux artifacts for joining with sample info
-            // Create channel with both full ID (for downstream) and extracted name (for joining)
             // Extract actual sample name from complex IDs: FDMP20H000840-1a_L1_SimB4 -> SimB4
             demux_for_join_ch = demux_artifacts_ch.map { fullSampleId, artifact ->
-                // Extract sample name - handle prefixed patterns but preserve simple names
                 def extractedName = fullSampleId.contains('_L1_')
                     ? fullSampleId.replaceAll(/.*_L1_/, '')
                     : fullSampleId
@@ -255,7 +253,7 @@ workflow WF_CUTADAPT {
                     barcode_r: barcode_r,
                     primer_f: _primer_f,
                     primer_r: _primer_r,
-                    nextseq_trim: trimming_config.nextseq_trim
+                    nextseq_trim: nextseq_trim
                 ]
             }
 
@@ -276,39 +274,39 @@ workflow WF_CUTADAPT {
             trimmed_sequences_summary = merged_results_ch.sequences_summary
             individual_trimmed = trimmed_artifacts_ch[1]
         }
-        else if (primers.forward != null || trimming_config.nextseq_trim != null) {
-            // OPTIMIZED PATH: Direct import → single cutadapt call → DADA2
-            // Handles: primers only, nextseq-trim only, or both combined
-            // Import all sequences at once via manifest
-            import_results = IMPORT_FASTQS_TO_QIIME2(read_pairs_ch.collect(flat: false))
+    else if (primer_forward != null || params.cutadapt?.nextseq_trim != null) {
+        // OPTIMIZED PATH: Direct import → single cutadapt call → DADA2
+        // Handles: primers only, nextseq-trim only, or both combined
+        // Import all sequences at once via manifest
+        import_results = IMPORT_FASTQS_TO_QIIME2(read_pairs_ch.collect(flat: false))
 
-            // Apply cutadapt (optional primers + optional nextseq-trim) in a single pass
-            trim_results = TRIM_MERGED_CUTADAPT(
-                import_results.sequences,
-                primers.forward ?: null,
-                primers.reverse ?: null,
-                trimming_config.nextseq_trim ?: null
-            )
+        // Apply cutadapt (optional primers + optional nextseq-trim) in a single pass
+        trim_results = TRIM_MERGED_CUTADAPT(
+            import_results.sequences,
+            primer_forward,
+            primer_reverse,
+            nextseq_trim
 
-            exported_fastqs_ch = EXPORT_QIIME2_ARTIFACT(
-                trim_results.trimmed_sequences
-            ).flatMap { list_of_files ->
-                list_of_files.collect { file ->
-                    def file_name = file.getName()
-                    def sample_id = file_name.split('_')[0]
-                    // Assuming file names are like sample_01_L001_R1_001.fastq.gz
-                    [sample_id, file]
-                }
-            }.groupTuple().map { sample_id, files ->
-                [sample_id, files[0], files[1]]
+        )
+
+        exported_fastqs_ch = EXPORT_QIIME2_ARTIFACT(
+            trim_results.trimmed_sequences
+        ).flatMap { list_of_files ->
+            list_of_files.collect { file ->
+                def file_name = file.getName()
+                def sample_id = file_name.split('_')[0]
+                [sample_id, file]
             }
-
-            trimmed_sequences = trim_results.trimmed_sequences
-            trimmed_sequences_summary = trim_results.trimmed_sequences_summary
-            individual_trimmed = Channel.empty()
+        }.groupTuple().map { sample_id, files ->
+            [sample_id, files[0], files[1]]
         }
-    } else {
-        // No trimming - just import and summarize via manifest
+
+        trimmed_sequences = trim_results.trimmed_sequences
+        trimmed_sequences_summary = trim_results.trimmed_sequences_summary
+        individual_trimmed = Channel.empty()
+    }
+    else {
+        // No primers or nextseq-trim - just import and summarize via manifest
         import_results = IMPORT_FASTQS_TO_QIIME2(read_pairs_ch.collect(flat: false))
 
         trimmed_sequences = import_results.sequences
@@ -319,10 +317,11 @@ workflow WF_CUTADAPT {
                 list_of_files.collect { file ->
                     def file_name = file.getName()
                     def sample_id = file_name.split('_')[0]
-                    // Assuming file names are like sample_01_L001_R1_001.fastq.gz
                     [sample_id, file]
                 }
-            }.groupTuple().map { sample_id, files ->
+            }
+            .groupTuple()
+            .map { sample_id, files ->
                 [sample_id, files[0], files[1]]
             }
     }

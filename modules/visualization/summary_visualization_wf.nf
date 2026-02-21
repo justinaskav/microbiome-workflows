@@ -13,7 +13,7 @@ process SUMMARIZE_FEATURE_TABLE {
     path("feature_table_summary.qzv"), emit: feature_table_summary_qzv
 
     script:
-    def metadata_arg = metadata_file.name != 'NO_FILE' ? "--m-sample-metadata-file ${metadata_file}" : ""
+    def metadata_arg = metadata_file.name != 'NO_FILE' ? "--m-metadata-file ${metadata_file}" : ""
     """
     qiime feature-table summarize \\
         --i-table "${feature_table_qza}" \\

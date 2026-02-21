@@ -8,24 +8,29 @@ include { WF_QUALITY_CONTROL as WF_QUALITY_CONTROL_AFTER_TRIM } from '../modules
 
 workflow TRIMMING {
     take:
-    read_pairs_ch          // Channel of [sample_id, [r1, r2]]
+    read_pairs_ch // Channel of [sample_id, [r1, r2]]
     barcode_primer_info_ch // Barcode/primer info (may be empty)
-    primers                // Map with forward/reverse primers
-    trimming_options       // Map with enabled, use_sampleseq, skip_polyg_trim
+    trimming_options // Map with enabled, use_sampleseq, skip_polyg_trim
 
     main:
 
     trimming_config = [
-        enabled: trimming_options.enabled ?: true,
+        enabled: trimming_options.enabled,
         use_sampleseq: trimming_options.use_sampleseq ?: false,
+        nextseq_trim: trimming_options.nextseq_trim ?: null,
     ]
 
+    println "Trimming configuration in trimming_wf.nf: ${trimming_config}"
+
     if (trimming_config.enabled) {
+        def primers = trimming_options.primers ?: [:]
         trimming_results = WF_CUTADAPT(
             read_pairs_ch,
             barcode_primer_info_ch,
-            trimming_config,
-            primers
+            trimming_config.use_sampleseq,
+            trimming_config.nextseq_trim,
+            primers.forward ?: null,
+            primers.reverse ?: null
         )
 
         // Process exported fastqs for QC after cutadapt
@@ -42,7 +47,8 @@ workflow TRIMMING {
         trimmed_sequences_summary = trimming_results.trimmed_sequences_summary
         fastqc_after_trim = WF_QUALITY_CONTROL_AFTER_TRIM.out.fastqc_results
         multiqc_after_trim = WF_QUALITY_CONTROL_AFTER_TRIM.out.multiqc_report
-    } else {
+    }
+    else {
         // No trimming - pass through reads unchanged
         trimmed_reads_ch = read_pairs_ch
         trimmed_sequences = Channel.empty()
