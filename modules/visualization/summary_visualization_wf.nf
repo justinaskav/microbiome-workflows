@@ -17,7 +17,9 @@ process SUMMARIZE_FEATURE_TABLE {
     """
     qiime feature-table summarize \\
         --i-table "${feature_table_qza}" \\
-        --o-visualization feature_table_summary.qzv \\
+        --o-feature-frequencies feature_frequencies.qza \\
+        --o-sample-frequencies sample_frequencies.qza \\
+        --o-summary feature_table_summary.qzv \\
         ${metadata_arg} \\
         --verbose
     """
@@ -38,7 +40,9 @@ process SUMMARIZE_FEATURE_TABLE_NO_METADATA {
     """
     qiime feature-table summarize \\
         --i-table "${feature_table_qza}" \\
-        --o-visualization feature_table_summary.qzv \\
+        --o-feature-frequencies feature_frequencies.qza \\
+        --o-sample-frequencies sample_frequencies.qza \\
+        --o-summary feature_table_summary.qzv \\
         --verbose
     """
 }

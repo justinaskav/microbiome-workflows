@@ -16,8 +16,10 @@ process PICRUST2_EC_SUMMARY {
     script:
     """
     qiime feature-table summarize \\
-        --i-table ${ec_metagenome_qza} \\
-        --o-visualization ec_metagenome_summary.qzv \\
+        --i-table "${ec_metagenome_qza}" \\
+        --o-feature-frequencies feature_frequencies.qza \\
+        --o-sample-frequencies sample_frequencies.qza \\
+        --o-summary ec_metagenome_summary.qzv \\
         --verbose
     """
 }

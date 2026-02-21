@@ -33,7 +33,7 @@ process TRIM_CUTADAPT {
     conda params.qiime2_conda_env
 
     input:
-    tuple val(sampleId), path(demuxArtifact), val(barcode_f), val(barcode_r), val(primer_f), val(primer_r)
+    tuple val(sampleId), path(demuxArtifact), val(barcode_f), val(barcode_r), val(primer_f), val(primer_r), val(nextseq_trim)
 
     output:
     tuple val(sampleId), path("${sampleId}_trimmed.qza"), emit: trimmed_artifact
@@ -44,7 +44,6 @@ process TRIM_CUTADAPT {
     def cores = task.cpus > 0 ? task.cpus : 1
     def forw_read_5 = "${barcode_f}${primer_f}"
     def rev_read_5 = "${barcode_r}${primer_r}"
-    def nextseq_trim = params.cutadapt?.nextseq_trim
     def nextseq_arg = nextseq_trim != null ? "--p-nextseq-trim ${nextseq_trim}" : ''
 
     """
@@ -157,6 +156,7 @@ process TRIM_MERGED_CUTADAPT {
     path merged_sequences
     val primer_f
     val primer_r
+    val nextseq_trim
 
     output:
     path "trimmed_sequences.qza", emit: trimmed_sequences
@@ -165,7 +165,6 @@ process TRIM_MERGED_CUTADAPT {
     script:
     def minimum_length = params.cutadapt?.minimum_length ?: 100
     def cores = task.cpus > 0 ? task.cpus : 1
-    def nextseq_trim = params.cutadapt?.nextseq_trim
     def nextseq_arg = nextseq_trim != null ? "--p-nextseq-trim ${nextseq_trim}" : ''
     def has_primers = primer_f != null && primer_f.toString() != '' && primer_f.toString() != 'null'
     def primer_args = has_primers
@@ -256,6 +255,7 @@ workflow WF_CUTADAPT {
                     barcode_r: barcode_r,
                     primer_f: _primer_f,
                     primer_r: _primer_r,
+                    nextseq_trim: trimming_config.nextseq_trim
                 ]
             }
 
@@ -276,7 +276,7 @@ workflow WF_CUTADAPT {
             trimmed_sequences_summary = merged_results_ch.sequences_summary
             individual_trimmed = trimmed_artifacts_ch[1]
         }
-        else if (primers.forward != null || params.cutadapt?.nextseq_trim != null) {
+        else if (primers.forward != null || trimming_config.nextseq_trim != null) {
             // OPTIMIZED PATH: Direct import → single cutadapt call → DADA2
             // Handles: primers only, nextseq-trim only, or both combined
             // Import all sequences at once via manifest
@@ -287,6 +287,7 @@ workflow WF_CUTADAPT {
                 import_results.sequences,
                 primers.forward ?: null,
                 primers.reverse ?: null,
+                trimming_config.nextseq_trim ?: null
             )
 
             exported_fastqs_ch = EXPORT_QIIME2_ARTIFACT(

@@ -16,8 +16,10 @@ process PICRUST2_KO_SUMMARY {
     script:
     """
     qiime feature-table summarize \\
-        --i-table ${ko_metagenome_qza} \\
-        --o-visualization ko_metagenome_summary.qzv \\
+        --i-table "${ko_metagenome_qza}" \\
+        --o-feature-frequencies feature_frequencies.qza \\
+        --o-sample-frequencies sample_frequencies.qza \\
+        --o-summary ko_metagenome_summary.qzv \\
         --verbose
     """
 }

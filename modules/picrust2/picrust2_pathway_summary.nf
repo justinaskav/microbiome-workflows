@@ -16,8 +16,10 @@ process PICRUST2_PATHWAY_SUMMARY {
     script:
     """
     qiime feature-table summarize \\
-        --i-table ${pathway_abundance_qza} \\
-        --o-visualization pathway_abundance_summary.qzv \\
+        --i-table "${pathway_abundance_qza}" \\
+        --o-feature-frequencies feature_frequencies.qza \\
+        --o-sample-frequencies sample_frequencies.qza \\
+        --o-summary pathway_abundance_summary.qzv \\
         --verbose
     """
 }
