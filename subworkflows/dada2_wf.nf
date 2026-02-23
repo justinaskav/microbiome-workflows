@@ -36,7 +36,7 @@ workflow DADA2 {
         dada2_config.n_reads_learn,
         dada2_config.n_threads,
         dada2_config.sample_prefix_to_remove,
-        dada2_config.binned_quality_scores,
+        dada2_config.binned_quality_scores ?: [],
     )
 
     emit:
