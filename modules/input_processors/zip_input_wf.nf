@@ -30,6 +30,7 @@ workflow WF_ZIP_INPUT {
         }
     }
     .groupTuple()
+    .map { sample_name, files -> tuple(sample_name, files.sort { it.getName() }) }
     .set { read_pairs_ch }
 
     // Parse SampleSeq info for barcode/primer information

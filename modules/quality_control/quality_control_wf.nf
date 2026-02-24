@@ -1,5 +1,6 @@
 // Process to run FastQC on read pairs
 process RUN_FASTQC {
+    cache 'lenient'
     conda 'bioconda::fastqc'
     cpus params.fastqc_cpus ?: 2
 

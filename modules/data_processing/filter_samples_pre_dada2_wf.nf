@@ -31,6 +31,7 @@ process EXTRACT_METADATA_SAMPLE_IDS {
 // staging is needed in the when: block.
 process FILTER_READ_PAIR {
     tag "filter_pre_dada2_${meta}"
+    cache 'lenient'
 
     input:
     tuple val(meta), path(reads)

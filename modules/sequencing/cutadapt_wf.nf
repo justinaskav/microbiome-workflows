@@ -3,6 +3,7 @@
 
 process IMPORT_READS_TO_QZA {
     tag "Import ${sampleId}"
+    cache 'lenient'
 
     conda params.qiime2_conda_env
 
@@ -14,9 +15,13 @@ process IMPORT_READS_TO_QZA {
 
     script:
     """
+    # Identify forward/reverse reads by filename pattern (defensive against tuple ordering)
+    FWD=\$(ls *.fastq.gz | grep '_R1_' | head -1)
+    REV=\$(ls *.fastq.gz | grep '_R2_' | head -1)
+
     # Create manifest file for this sample (avoids Casava filename requirements)
     printf 'sample-id\\tforward-absolute-filepath\\treverse-absolute-filepath\\n' > manifest.tsv
-    printf '%s\\t%s\\t%s\\n' '${sampleId}' "\$(readlink -f ${reads[0]})" "\$(readlink -f ${reads[1]})" >> manifest.tsv
+    printf '%s\\t%s\\t%s\\n' '${sampleId}' "\$(readlink -f \$FWD)" "\$(readlink -f \$REV)" >> manifest.tsv
 
     qiime tools import \
       --type 'SampleData[PairedEndSequencesWithQuality]' \
