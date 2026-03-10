@@ -2,7 +2,7 @@
 process RUN_FASTQC {
     cache 'lenient'
     conda 'bioconda::fastqc'
-    cpus params.fastqc_cpus ?: 2
+    cpus params.qc?.fastqc_cpus ?: 2
 
     input:
     tuple val(meta), path(reads) // Expects e.g. [ id:"sample1", [read1.fq.gz, read2.fq.gz] ]

@@ -279,7 +279,7 @@ workflow WF_CUTADAPT {
             trimmed_sequences_summary = merged_results_ch.sequences_summary
             individual_trimmed = trimmed_artifacts_ch[1]
         }
-    else if (primer_forward != null || params.cutadapt?.nextseq_trim != null) {
+    else if (primer_forward != null || nextseq_trim != null) {
         // OPTIMIZED PATH: Direct import → single cutadapt call → DADA2
         // Handles: primers only, nextseq-trim only, or both combined
         // Import all sequences at once via manifest

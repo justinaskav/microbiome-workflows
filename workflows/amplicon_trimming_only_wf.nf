@@ -14,7 +14,6 @@ workflow AMPLICON_TRIMMING_ONLY {
     name
     metadata_path
     input_options
-    primers
     trimming_options
 
     main:
@@ -31,17 +30,10 @@ workflow AMPLICON_TRIMMING_ONLY {
     qc_results = QC(input_processing_results.read_pairs_ch)
 
     // Step 3: Trimming
-    trimming_config = [
-        enabled: trimming_options.enabled ?: true,
-        use_sampleseq: trimming_options.use_sampleseq ?: false,
-        skip_polyg_trim: trimming_options.skip_polyg_trim ?: false,
-    ]
-
-    if (trimming_config.enabled) {
+    if (trimming_options?.enabled) {
         trimming_results = TRIMMING(
             input_processing_results.read_pairs_ch,
             input_processing_results.barcode_primer_info_ch,
-            primers,
             trimming_options
         )
 

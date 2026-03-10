@@ -3,17 +3,11 @@
 // Include visualization workflow
 include { VISUALIZE_TAXONOMY } from './taxonomy_visualization_wf.nf'
 
-// Default parameters specific to this workflow module
-// These can be overridden in nextflow.config or main script
-params.classifier_confidence = 0.7        // Confidence threshold for taxonomic classification
-params.classifier_read_orientation = 'auto' // Read orientation for classification
-params.classifier_cpus = 2                // Default CPUs for classification process
-
 // Process to classify representative sequences using a pre-trained sklearn classifier
 process CLASSIFY_SKLEARN_QIIME2 {
     tag "classify_taxonomy_${rep_seqs_qza.getBaseName()}"
     conda "${params.qiime2_conda_env}"
-    cpus params.classifier_cpus ?: 4 // Use module-specific or default CPUs
+    cpus params.taxonomy?.classifier_cpus ?: 4
 
     input:
     path rep_seqs_qza     // Representative sequences (QZA)
@@ -29,8 +23,8 @@ process CLASSIFY_SKLEARN_QIIME2 {
     qiime feature-classifier classify-sklearn \
         --i-reads "${rep_seqs_qza}" \
         --i-classifier "${classifier_qza}" \
-        --p-confidence ${params.classifier_confidence} \
-        --p-read-orientation "${params.classifier_read_orientation}" \
+        --p-confidence ${params.taxonomy?.classification_confidence ?: 0.7} \
+        --p-read-orientation "${params.taxonomy?.classifier_read_orientation ?: 'auto'}" \
         --p-n-jobs ${n_jobs} \
         --o-classification taxonomy.qza \
         --verbose

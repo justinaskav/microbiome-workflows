@@ -153,7 +153,7 @@ workflow AMPLICON_WORKFLOW {
     dada2_ft_summary = denoising_results.feature_table_summary
     dada2_rep_seqs_summary = denoising_results.rep_seqs_summary
     dada2_denoising_stats_summary = denoising_results.denoising_stats_summary
-    dada2_base_transition_stats_summary = denoising_base_transition_ch
+    dada2_base_transition_stats = denoising_base_transition_ch
     decontam_scores = filtering_results.decontam_scores
     decontam_scores_viz = filtering_results.decontam_scores_viz
     contaminant_table = filtering_results.contaminant_table

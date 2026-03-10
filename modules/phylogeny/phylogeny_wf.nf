@@ -1,14 +1,9 @@
 // Workflow for Phylogenetic Tree Construction using QIIME2 align-to-tree-mafft-fasttree pipeline
 
-// Default parameters specific to this workflow module
-params.phylogeny_n_threads = 4            // Threads for MAFFT part of the pipeline
-params.phylogeny_mask_max_gap_freq = 1.0  // Max gap frequency for masking (1.0 means no filtering by this criterion initially)
-params.phylogeny_mask_min_conservation = 0.4// Min conservation for masking (0.4 is a common default)
-
 process ALIGN_AND_TREE_QIIME2 {
     tag "phylogeny_pipeline_${rep_seqs_qza.getBaseName()}"
     conda "${params.qiime2_conda_env}"
-    cpus params.phylogeny_n_threads ?: 4
+    cpus params.phylogeny?.n_threads ?: 4
 
     input:
     path rep_seqs_qza // Representative sequences (QZA)
@@ -29,8 +24,8 @@ process ALIGN_AND_TREE_QIIME2 {
     qiime phylogeny align-to-tree-mafft-fasttree \\
         --i-sequences "${rep_seqs_qza}" \\
         --p-n-threads ${threads_to_use} \\
-        --p-mask-max-gap-frequency ${params.phylogeny_mask_max_gap_freq} \\
-        --p-mask-min-conservation ${params.phylogeny_mask_min_conservation} \\
+        --p-mask-max-gap-frequency ${params.phylogeny?.mask_max_gap_freq ?: 1.0} \\
+        --p-mask-min-conservation ${params.phylogeny?.mask_min_conservation ?: 0.4} \\
         --o-alignment alignment.qza \\
         --o-masked-alignment masked_alignment.qza \\
         --o-tree unrooted_tree.qza \\

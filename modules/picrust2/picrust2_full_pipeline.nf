@@ -31,8 +31,8 @@ process PICRUST2_FULL_PIPELINE {
         --i-table ${feature_table_qza} \\
         --i-seq ${rep_seqs_qza} \\
         --p-threads ${threads_to_use} \\
-        --p-hsp-method mp \\
-        --p-max-nsti 2 \\
+        --p-hsp-method ${params.picrust2?.hsp_method ?: 'mp'} \\
+        --p-max-nsti ${params.picrust2?.max_nsti ?: 2} \\
         --o-ko-metagenome picrust2_output/ko_metagenome.qza \\
         --o-ec-metagenome picrust2_output/ec_metagenome.qza \\
         --o-pathway-abundance picrust2_output/pathway_abundance.qza \\

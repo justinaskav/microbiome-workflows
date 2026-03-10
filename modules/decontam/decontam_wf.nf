@@ -1,12 +1,6 @@
 // Decontamination workflow using QIIME2's q2-quality-control plugin
 // Based on experiment.py implementation for both frequency and prevalence methods
 
-// Default parameters for decontam workflows
-params.decontam_freq_concentration_column = 'DNA concentration'
-params.decontam_prev_control_column = 'Decontam Control'
-params.decontam_prev_control_indicator = 'Negative Control'
-params.decontam_threshold = 0.1  // Default p-value threshold for filtering contaminants
-
 // Process to identify contaminants using frequency method (based on DNA concentration)
 process DECONTAM_IDENTIFY_FREQUENCY {
     tag "decontam_identify_frequency"
@@ -224,8 +218,8 @@ workflow WF_DECONTAM_FREQUENCY {
 
     main:
     // Use provided column name or default parameter
-    def conc_column = concentration_column ?: params.decontam_freq_concentration_column
-    def filter_threshold = threshold ?: params.decontam_threshold
+    def conc_column = concentration_column ?: params.decontam?.freq_concentration_column
+    def filter_threshold = threshold ?: params.decontam?.threshold
 
     // Identify contaminants using frequency method
     decontam_identify_results = DECONTAM_IDENTIFY_FREQUENCY(
@@ -281,9 +275,9 @@ workflow WF_DECONTAM_PREVALENCE {
 
     main:
     // Use provided parameters or defaults
-    def ctrl_column = control_column ?: params.decontam_prev_control_column
-    def ctrl_indicator = control_indicator ?: params.decontam_prev_control_indicator
-    def filter_threshold = threshold ?: params.decontam_threshold
+    def ctrl_column = control_column ?: params.decontam?.prev_control_column
+    def ctrl_indicator = control_indicator ?: params.decontam?.prev_control_indicator
+    def filter_threshold = threshold ?: params.decontam?.threshold
 
     // Identify contaminants using prevalence method
     decontam_identify_results = DECONTAM_IDENTIFY_PREVALENCE(
@@ -340,10 +334,10 @@ workflow WF_DECONTAM_COMBINED {
 
     main:
     // Use provided parameters or defaults
-    def conc_column = concentration_column ?: params.decontam_freq_concentration_column
-    def ctrl_column = control_column ?: params.decontam_prev_control_column
-    def ctrl_indicator = control_indicator ?: params.decontam_prev_control_indicator
-    def filter_threshold = threshold ?: params.decontam_threshold
+    def conc_column = concentration_column ?: params.decontam?.freq_concentration_column
+    def ctrl_column = control_column ?: params.decontam?.prev_control_column
+    def ctrl_indicator = control_indicator ?: params.decontam?.prev_control_indicator
+    def filter_threshold = threshold ?: params.decontam?.threshold
 
     // Identify contaminants using combined method
     decontam_identify_results = DECONTAM_IDENTIFY_COMBINED(

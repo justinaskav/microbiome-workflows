@@ -10,7 +10,7 @@ workflow TRIMMING {
     take:
     read_pairs_ch // Channel of [sample_id, [r1, r2]]
     barcode_primer_info_ch // Barcode/primer info (may be empty)
-    trimming_options // Map with enabled, use_sampleseq, skip_polyg_trim
+    trimming_options // Map with enabled, use_sampleseq, nextseq_trim
 
     main:
 
@@ -23,6 +23,8 @@ workflow TRIMMING {
     println "Trimming configuration in trimming_wf.nf: ${trimming_config}"
 
     if (trimming_config.enabled) {
+        // TODO: In use_sampleseq mode, primers come from barcode_primer_info_ch per sample.
+        // For non-sampleseq mode, primers would need to be passed explicitly from the batch config.
         def primers = trimming_options.primers ?: [:]
         trimming_results = WF_CUTADAPT(
             read_pairs_ch,
