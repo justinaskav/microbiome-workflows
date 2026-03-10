@@ -12,10 +12,11 @@ microbiome-workflows/
 │   └── amplicon_post_trim_wf.nf     # DADA2 + downstream (after merge)
 ├── subworkflows/       # Composable stages (compose modules, apply config)
 │   ├── dada2_wf.nf, filtering_wf.nf, taxonomy_wf.nf, ...
+│   ├── r_alpha_diversity_wf.nf, r_beta_diversity_wf.nf
 │   └── trimming_wf.nf, diversity_wf.nf, picrust2_wf.nf, ...
 ├── modules/            # Atomic units (processes + thin workflow wrappers)
 │   ├── dada2/, decontam/, diversity/, phylogeny/, picrust2/,
-│   │   sequencing/, taxonomy/, quality_control/, ...
+│   │   r_diversity/, sequencing/, taxonomy/, quality_control/, ...
 │   └── data_processing/, input_processors/, reference_databases/
 ├── templates/          # Config template for new projects
 └── scripts/            # Helper R/Python scripts used by processes
@@ -39,7 +40,7 @@ batch_option ?: params.section?.key ?: hardcoded_default
 ```
 
 ### How it works:
-1. **Config** (`nextflow.config`) defines `params.*` maps: `params.dada2`, `params.taxonomy`, `params.decontam`, `params.phylogeny`, `params.picrust2`, `params.cutadapt`, `params.qc`
+1. **Config** (`nextflow.config`) defines `params.*` maps: `params.dada2`, `params.taxonomy`, `params.decontam`, `params.phylogeny`, `params.picrust2`, `params.cutadapt`, `params.qc`, `params.r_diversity`
 2. **Batch config** (`params.batches[]`) can override per-batch: `dada2`, `trimming`, `decontam`, `taxonomy`, `other`
 3. **Subworkflows** receive option maps and merge with global params:
    ```groovy
