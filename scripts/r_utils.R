@@ -163,3 +163,49 @@ build_metadata <- function(args, tse, params = list()) {
     analysis_params = params
   )
 }
+
+#' Create an NA analysis report for metadata variables
+#'
+#' @param tse A TreeSummarizedExperiment object
+#' @param variables Character vector of column names to check.
+#'   Only columns present in colData(tse) are checked.
+#' @param threshold Percentage threshold for flagging high-NA variables (default: 20).
+#' @param verbose Print report to console (default: TRUE).
+#' @return A list: na_report (data.frame), high_na_vars (character),
+#'   na_threshold (numeric), analysis_date (Date).
+create_na_report <- function(tse, variables, threshold = 20, verbose = TRUE) {
+  vars_present <- intersect(variables, colnames(SummarizedExperiment::colData(tse)))
+  metadata_df <- as.data.frame(SummarizedExperiment::colData(tse)[, vars_present, drop = FALSE])
+
+  na_counts <- vapply(metadata_df, function(x) sum(is.na(x)), integer(1))
+  na_pct <- (na_counts / nrow(metadata_df)) * 100
+
+  na_report <- data.frame(
+    Variable = names(na_counts),
+    NACount = na_counts,
+    NAPercentage = round(na_pct, 2),
+    row.names = NULL
+  )
+  na_report <- na_report[order(-na_report$NAPercentage), ]
+
+  high_na_vars <- na_report$Variable[na_report$NAPercentage > threshold]
+
+  if (verbose) {
+    cat("\n--- Missing Value (NA) Report ---\n")
+    print(na_report)
+    cat("--------------------------------\n")
+    if (length(high_na_vars) > 0) {
+      warning(
+        "High proportion (>", threshold, "%) of NA values in: ",
+        paste(high_na_vars, collapse = ", ")
+      )
+    }
+  }
+
+  list(
+    na_report = na_report,
+    high_na_vars = high_na_vars,
+    na_threshold = threshold,
+    analysis_date = Sys.Date()
+  )
+}
