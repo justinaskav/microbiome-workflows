@@ -3,14 +3,6 @@
 
 nextflow.enable.dsl = 2
 
-// Supported patterns for different Illumina naming conventions
-def DEFAULT_PATTERNS = [
-    '*_{R1,R2}_001.fastq.gz',           // Most common
-    '*_L001_{R1,R2}_001.fastq.gz',      // With lane info
-    '*_{1,2}.fastq.gz',                  // Simple numbered
-    '*_R{1,2}.fastq.gz',                 // Simple R1/R2
-]
-
 workflow WF_FASTQ_INPUT {
     take:
     data_dir                    // Data directory path or map with data_dir and fastq_pattern

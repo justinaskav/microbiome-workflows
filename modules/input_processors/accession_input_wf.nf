@@ -323,7 +323,7 @@ process CHECK_FONDUE_SUCCESS {
     path metadata_qza
 
     output:
-    env FONDUE_SUCCESS, emit: success_flag
+    env 'FONDUE_SUCCESS', emit: success_flag
     stdout emit: check_log
 
     script:

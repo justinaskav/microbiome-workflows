@@ -7,6 +7,7 @@ nextflow.enable.dsl = 2
 // Include subworkflows
 include { INPUT_PROCESSING } from '../subworkflows/input_processing_wf.nf'
 include { QC } from '../subworkflows/qc_wf.nf'
+include { HOST_ALIGNMENT } from '../subworkflows/host_alignment_wf.nf'
 include { TRIMMING } from '../subworkflows/trimming_wf.nf'
 
 workflow AMPLICON_TRIMMING_ONLY {
@@ -15,6 +16,8 @@ workflow AMPLICON_TRIMMING_ONLY {
     metadata_path
     input_options
     trimming_options
+    host_options
+    host_index_ch
 
     main:
 
@@ -37,16 +40,25 @@ workflow AMPLICON_TRIMMING_ONLY {
             trimming_options
         )
 
-        trimmed_reads_ch = trimming_results.trimmed_reads
+        reads_after_trim = trimming_results.trimmed_reads
         trimmed_qza = trimming_results.trimmed_sequences
         fastqc_after_cutadapt = trimming_results.fastqc_results_after_trim
         multiqc_after_cutadapt = trimming_results.multiqc_report_after_trim
     } else {
-        trimmed_reads_ch = input_processing_results.read_pairs_ch
+        reads_after_trim = input_processing_results.read_pairs_ch
         trimmed_qza = Channel.empty()
         fastqc_after_cutadapt = Channel.empty()
         multiqc_after_cutadapt = Channel.empty()
     }
+
+    // Step 3b: Host-alignment QC + optional removal (after cutadapt so bowtie2
+    // sees primer-free inserts; default end-to-end mode then aligns correctly).
+    host_results = HOST_ALIGNMENT(
+        reads_after_trim,
+        host_options,
+        host_index_ch,
+    )
+    trimmed_reads_ch = host_results.reads_out
 
     emit:
     trimmed_reads = trimmed_reads_ch
@@ -55,6 +67,8 @@ workflow AMPLICON_TRIMMING_ONLY {
     barcode_primer_info = input_processing_results.barcode_primer_info_ch
     fastqc_results = qc_results.fastqc_results
     multiqc_report = qc_results.multiqc_report
+    host_alignment_multiqc = host_results.multiqc_report
+    host_alignment_logs = host_results.logs
     fastqc_results_after_cutadapt = fastqc_after_cutadapt
     multiqc_report_after_cutadapt = multiqc_after_cutadapt
 }

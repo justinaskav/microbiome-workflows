@@ -87,6 +87,7 @@ for (method in distance_methods) {
   if (meta_key %in% names(metadata(tse))) {
     mds <- cmdscale(as.dist(metadata(tse)[[meta_key]]), k = args$ncomponents, eig = TRUE)
     reducedDim(tse, dimred_name) <- mds$points
+    metadata(tse)[[paste0(meta_key, "_eig")]] <- mds$eig
   } else {
     cat("Skipping MDS for", method, "- dissimilarity matrix not found in metadata\n")
   }

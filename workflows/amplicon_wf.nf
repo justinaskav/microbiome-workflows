@@ -6,6 +6,7 @@ nextflow.enable.dsl = 2
 // Include subworkflows
 include { INPUT_PROCESSING } from '../subworkflows/input_processing_wf.nf'
 include { QC } from '../subworkflows/qc_wf.nf'
+include { HOST_ALIGNMENT } from '../subworkflows/host_alignment_wf.nf'
 include { TRIMMING } from '../subworkflows/trimming_wf.nf'
 include { DADA2 } from '../subworkflows/dada2_wf.nf'
 include { FILTERING } from '../subworkflows/filtering_wf.nf'
@@ -27,6 +28,8 @@ workflow AMPLICON_WORKFLOW {
     taxonomy_options
     database_ch_list
     other_options
+    host_options
+    host_index_ch
 
     main:
 
@@ -48,15 +51,24 @@ workflow AMPLICON_WORKFLOW {
             input_processing_results.barcode_primer_info_ch,
             trimming_options,
         )
-        sequences_for_dada2 = trimming_results.trimmed_reads
+        reads_after_trim = trimming_results.trimmed_reads
         fastqc_after_cutadapt = trimming_results.fastqc_results_after_trim
         multiqc_after_cutadapt = trimming_results.multiqc_report_after_trim
     }
     else {
-        sequences_for_dada2 = input_processing_results.read_pairs_ch
+        reads_after_trim = input_processing_results.read_pairs_ch
         fastqc_after_cutadapt = Channel.empty()
         multiqc_after_cutadapt = Channel.empty()
     }
+
+    // Step 3b: Host-alignment QC + optional removal (after cutadapt so bowtie2
+    // sees primer-free inserts; default end-to-end mode then aligns correctly).
+    host_results = HOST_ALIGNMENT(
+        reads_after_trim,
+        host_options,
+        host_index_ch,
+    )
+    sequences_for_dada2 = host_results.reads_out
 
     // Step 3.5: Pre-DADA2 sample filtering (optional)
     if (other_options?.filter_samples_by_metadata) {
@@ -147,6 +159,8 @@ workflow AMPLICON_WORKFLOW {
     emit:
     fastqc_results = qc_results.fastqc_results
     multiqc_report = qc_results.multiqc_report
+    host_alignment_multiqc = host_results.multiqc_report
+    host_alignment_logs = host_results.logs
     fastqc_results_after_cutadapt = fastqc_after_cutadapt
     multiqc_report_after_cutadapt = multiqc_after_cutadapt
     dada2_denoising_stats = denoising_results.denoising_stats
