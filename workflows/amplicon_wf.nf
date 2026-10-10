@@ -41,15 +41,29 @@ workflow AMPLICON_WORKFLOW {
         metadata_path ? file(metadata_path) : Channel.empty()
     )
 
-    // Step 2: Quality Control on original reads
-    qc_results = QC(input_processing_results.read_pairs_ch)
+    // Optional steps that do not feed the feature table, taxonomy or tree.
+    // All run by default; set the flag in the batch `other` map to skip.
+    def skip_qc = other_options?.skip_qc ?: false                // FastQC/MultiQC reports
+    def skip_summaries = other_options?.skip_summaries ?: false  // QIIME2 .qzv summaries
+    def skip_phylogeny = other_options?.skip_phylogeny ?: false  // per-batch tree
+
+    // Step 2: Quality Control on original reads (optional)
+    if (!skip_qc) {
+        qc_results = QC(input_processing_results.read_pairs_ch)
+        fastqc_results_ch = qc_results.fastqc_results
+        multiqc_report_ch = qc_results.multiqc_report
+    }
+    else {
+        fastqc_results_ch = Channel.empty()
+        multiqc_report_ch = Channel.empty()
+    }
 
     // Step 3: Trimming
     if (trimming_options?.enabled) {
         trimming_results = TRIMMING(
             input_processing_results.read_pairs_ch,
             input_processing_results.barcode_primer_info_ch,
-            trimming_options,
+            trimming_options + [skip_qc: skip_qc, skip_merged_artifact: skip_summaries],
         )
         reads_after_trim = trimming_results.trimmed_reads
         fastqc_after_cutadapt = trimming_results.fastqc_results_after_trim
@@ -65,7 +79,7 @@ workflow AMPLICON_WORKFLOW {
     // sees primer-free inserts; default end-to-end mode then aligns correctly).
     host_results = HOST_ALIGNMENT(
         reads_after_trim,
-        host_options,
+        (host_options ?: [:]) + [skip_multiqc: skip_qc],
         host_index_ch,
     )
     sequences_for_dada2 = host_results.reads_out
@@ -80,7 +94,7 @@ workflow AMPLICON_WORKFLOW {
     }
 
     // Step 4: Denoising (DADA2)
-    denoising_results = DADA2(sequences_for_dada2, dada2_options)
+    denoising_results = DADA2(sequences_for_dada2, dada2_options + [skip_summaries: skip_summaries])
     denoising_base_transition_ch = denoising_results.base_transition_stats
 
     // Step 5: Filtering (metadata filtering + decontamination)
@@ -89,7 +103,7 @@ workflow AMPLICON_WORKFLOW {
         denoising_results.feature_table,
         denoising_results.rep_seqs,
         metadata_to_use,
-        decontam_options,
+        (decontam_options ?: [:]) + [skip_contaminant_taxonomy: other_options?.skip_contaminant_taxonomy ?: false],
         database_ch_list.classifier,
     )
 
@@ -99,7 +113,7 @@ workflow AMPLICON_WORKFLOW {
         filtering_results.filtered_feature_table,
         metadata_to_use,
         database_ch_list,
-        taxonomy_options,
+        (taxonomy_options ?: [:]) + [skip_summaries: skip_summaries],
     )
 
     // Step 7: PICRUSt2 Functional Prediction (skipped for ITS)
@@ -137,28 +151,38 @@ workflow AMPLICON_WORKFLOW {
         picrust2_pathway_bray_curtis_emperor_ch = picrust2_results.pathway_bray_curtis_emperor
     }
 
-    // Step 8: Phylogeny
-    phylogeny_results = PHYLOGENY(filtering_results.filtered_rep_seqs)
+    // Step 8: Phylogeny (optional)
+    if (!skip_phylogeny) {
+        phylogeny_results = PHYLOGENY(filtering_results.filtered_rep_seqs)
+        unrooted_tree_ch = phylogeny_results.unrooted_tree
+        rooted_tree_ch = phylogeny_results.rooted_tree
+    }
+    else {
+        unrooted_tree_ch = Channel.empty()
+        rooted_tree_ch = Channel.empty()
+    }
 
     // Step 9: Diversity Analysis (optional)
+    // Phylogenetic core metrics need the tree, so skipping phylogeny skips them too.
+    def is_its = other_options?.amplicon_type == "ITS" || other_options?.database == "unite"
     diversity_options = [
         sampling_depth: other_options?.diversity_sampling_depth,
         amplicon_type: other_options?.amplicon_type,
         database: other_options?.database,
-        skip: other_options?.skip_diversity ?: false,
+        skip: other_options?.skip_diversity ?: (skip_phylogeny && !is_its),
         auto_depth_percentile: other_options?.auto_depth_percentile ?: 0.0,
     ]
 
     diversity_results = DIVERSITY(
         filtering_results.filtered_feature_table,
-        phylogeny_results.rooted_tree,
+        rooted_tree_ch,
         metadata_to_use,
         diversity_options,
     )
 
     emit:
-    fastqc_results = qc_results.fastqc_results
-    multiqc_report = qc_results.multiqc_report
+    fastqc_results = fastqc_results_ch
+    multiqc_report = multiqc_report_ch
     host_alignment_multiqc = host_results.multiqc_report
     host_alignment_logs = host_results.logs
     fastqc_results_after_cutadapt = fastqc_after_cutadapt
@@ -188,8 +212,8 @@ workflow AMPLICON_WORKFLOW {
     picrust2_pathway_summary = picrust2_pathway_summary_ch
     picrust2_pathway_jaccard_emperor = picrust2_pathway_jaccard_emperor_ch
     picrust2_pathway_bray_curtis_emperor = picrust2_pathway_bray_curtis_emperor_ch
-    phylogeny_unrooted = phylogeny_results.unrooted_tree
-    phylogeny_rooted = phylogeny_results.rooted_tree
+    phylogeny_unrooted = unrooted_tree_ch
+    phylogeny_rooted = rooted_tree_ch
     rarefied_table = diversity_results.rarefied_table
     jaccard_emperor = diversity_results.jaccard_emperor
     bray_curtis_emperor = diversity_results.bray_curtis_emperor

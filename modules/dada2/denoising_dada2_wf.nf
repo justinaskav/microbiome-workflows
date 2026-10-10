@@ -176,6 +176,7 @@ workflow WF_DENOISE_DADA2 {
         dada2_n_threads
         sample_prefix_to_remove // Optional prefix to remove from sample IDs
         dada2_binned_quality_scores // Optional list of binned quality scores
+        skip_summaries // Boolean: denoise only, no .qzv summaries
 
     main:
         // 1. Prepare manifest from read_pairs_ch
@@ -204,22 +205,37 @@ workflow WF_DENOISE_DADA2 {
         )
         dada2_results_ch = RUN_DADA2_PAIRED_END_QIIME2.out
 
-        // 4. Generate Summaries/Visualizations
-        SUMMARIZE_DEMUX_DADA2 ( demux_qza_ch )
-        SUMMARIZE_FEATURE_TABLE_NO_METADATA ( dada2_results_ch.feature_table_qza )
-        PLOT_BASE_TRANSITIONS( dada2_results_ch.base_transition_stats_qza )
-        TABULATE_SEQS ( dada2_results_ch.rep_seqs_qza )
-        TABULATE_DENOISING_STATS_DADA2 ( dada2_results_ch.denoising_stats_qza )
+        // 4. Generate Summaries/Visualizations (optional)
+        if (!skip_summaries) {
+            SUMMARIZE_DEMUX_DADA2 ( demux_qza_ch )
+            SUMMARIZE_FEATURE_TABLE_NO_METADATA ( dada2_results_ch.feature_table_qza )
+            PLOT_BASE_TRANSITIONS( dada2_results_ch.base_transition_stats_qza )
+            TABULATE_SEQS ( dada2_results_ch.rep_seqs_qza )
+            TABULATE_DENOISING_STATS_DADA2 ( dada2_results_ch.denoising_stats_qza )
+
+            demux_summary_ch = SUMMARIZE_DEMUX_DADA2.out.demux_summary_qzv
+            feature_table_summary_ch = SUMMARIZE_FEATURE_TABLE_NO_METADATA.out.feature_table_summary_qzv
+            rep_seqs_summary_ch = TABULATE_SEQS.out.rep_seqs_summary_qzv
+            denoising_stats_summary_ch = TABULATE_DENOISING_STATS_DADA2.out.denoising_stats_summary_qzv
+            base_transition_stats_ch = PLOT_BASE_TRANSITIONS.out.base_transition_stats_qzv
+        }
+        else {
+            demux_summary_ch = Channel.empty()
+            feature_table_summary_ch = Channel.empty()
+            rep_seqs_summary_ch = Channel.empty()
+            denoising_stats_summary_ch = Channel.empty()
+            base_transition_stats_ch = Channel.empty()
+        }
 
     emit:
         feature_table = dada2_results_ch.feature_table_qza
         representative_sequences = dada2_results_ch.rep_seqs_qza
         denoising_stats = dada2_results_ch.denoising_stats_qza
-        demux_summary = SUMMARIZE_DEMUX_DADA2.out.demux_summary_qzv
-        feature_table_summary = SUMMARIZE_FEATURE_TABLE_NO_METADATA.out.feature_table_summary_qzv
-        rep_seqs_summary = TABULATE_SEQS.out.rep_seqs_summary_qzv
-        denoising_stats_summary = TABULATE_DENOISING_STATS_DADA2.out.denoising_stats_summary_qzv
-        base_transition_stats = PLOT_BASE_TRANSITIONS.out.base_transition_stats_qzv
+        demux_summary = demux_summary_ch
+        feature_table_summary = feature_table_summary_ch
+        rep_seqs_summary = rep_seqs_summary_ch
+        denoising_stats_summary = denoising_stats_summary_ch
+        base_transition_stats = base_transition_stats_ch
         imported_demux_qza = demux_qza_ch
 }
 

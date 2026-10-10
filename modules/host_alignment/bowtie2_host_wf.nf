@@ -135,17 +135,26 @@ workflow WF_PREPARE_HOST_INDEX {
     index_files = index_ch
 }
 
-// Per-batch alignment + MultiQC. Consumes a prebuilt index channel.
+// Per-batch alignment + (optional) MultiQC. Consumes a prebuilt index channel.
 workflow WF_BOWTIE2_HOST_ALIGNMENT {
     take:
     read_pairs_ch    // [sample_id, [r1, r2]]
     host_index_ch    // path channel: emit from WF_PREPARE_HOST_INDEX
+    skip_multiqc     // Boolean: align (and filter) only, no aggregated report
 
     main:
     align_results = ALIGN_HOST_BOWTIE2(read_pairs_ch, host_index_ch)
 
-    multiqc_input_ch = align_results.log.collect()
-    multiqc_results = MULTIQC_HOST_ALIGNMENT(multiqc_input_ch)
+    if (!skip_multiqc) {
+        multiqc_input_ch = align_results.log.collect()
+        multiqc_results = MULTIQC_HOST_ALIGNMENT(multiqc_input_ch)
+        multiqc_report_ch = multiqc_results.report
+        multiqc_data_ch = multiqc_results.data_dir
+    }
+    else {
+        multiqc_report_ch = Channel.empty()
+        multiqc_data_ch = Channel.empty()
+    }
 
     // Reshape unmapped pairs into the canonical [sample_id, [r1, r2]] tuple
     // used everywhere else in the pipeline.
@@ -156,6 +165,6 @@ workflow WF_BOWTIE2_HOST_ALIGNMENT {
     emit:
     logs           = align_results.log
     unmapped_reads = unmapped_reads_ch
-    multiqc_report = multiqc_results.report
-    multiqc_data   = multiqc_results.data_dir
+    multiqc_report = multiqc_report_ch
+    multiqc_data   = multiqc_data_ch
 }

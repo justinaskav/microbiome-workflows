@@ -21,7 +21,7 @@ include { WF_BOWTIE2_HOST_ALIGNMENT } from '../modules/host_alignment/bowtie2_ho
 workflow HOST_ALIGNMENT {
     take:
     read_pairs_ch    // [sample_id, [r1, r2]]
-    host_options     // Map: enabled, remove_aligned, sensitivity, cpus
+    host_options     // Map: enabled, remove_aligned, sensitivity, cpus, skip_multiqc
     host_index_ch    // Prebuilt bowtie2 index channel from WF_PREPARE_HOST_INDEX
 
     main:
@@ -36,7 +36,7 @@ workflow HOST_ALIGNMENT {
             : true)
 
     if (enabled) {
-        WF_BOWTIE2_HOST_ALIGNMENT(read_pairs_ch, host_index_ch)
+        WF_BOWTIE2_HOST_ALIGNMENT(read_pairs_ch, host_index_ch, opts.skip_multiqc ?: false)
         multiqc_report_ch = WF_BOWTIE2_HOST_ALIGNMENT.out.multiqc_report
         logs_ch           = WF_BOWTIE2_HOST_ALIGNMENT.out.logs
         reads_out_ch      = remove_aligned

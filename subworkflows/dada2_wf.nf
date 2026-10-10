@@ -8,7 +8,7 @@ include { WF_DENOISE_DADA2 } from '../modules/dada2/denoising_dada2_wf.nf'
 workflow DADA2 {
     take:
     sequences_ch   // Channel of [sample_id, [r1, r2]]
-    dada2_options  // Map with trunc_len_f, trunc_len_r, trim_left_f, trim_left_r, n_reads_learn, n_threads, sample_prefix_to_remove
+    dada2_options  // Map with trunc_len_f, trunc_len_r, trim_left_f, trim_left_r, n_reads_learn, n_threads, sample_prefix_to_remove, skip_summaries
 
     main:
 
@@ -37,6 +37,7 @@ workflow DADA2 {
         dada2_config.n_threads,
         dada2_config.sample_prefix_to_remove,
         dada2_config.binned_quality_scores ?: [],
+        dada2_options.skip_summaries ?: false,
     )
 
     emit:

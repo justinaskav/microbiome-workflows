@@ -201,6 +201,7 @@ workflow WF_CUTADAPT {
     nextseq_trim // Optional integer for nextseq-trim
     primer_forward // Forward primer sequence (or null)
     primer_reverse // Reverse primer sequence (or null)
+    skip_merged_artifact // Boolean: in sampleseq mode, don't re-import the trimmed reads into one artifact
 
     main:
 
@@ -270,13 +271,20 @@ workflow WF_CUTADAPT {
             // Export trimmed sequences to fastq
             exported_fastqs_ch = EXPORT_QIIME2_SEQUENCES(trimmed_artifacts_ch)
 
-            // Merge all trimmed sequences into a single artifact
-            merged_results_ch = IMPORT_FASTQS_TO_QIIME2(
-                exported_fastqs_ch.map { sample_id, r1, r2 -> [sample_id, [r1, r2]] }.collect(flat: false)
-            )
+            // Merge all trimmed sequences into a single artifact (optional; DADA2
+            // reads the exported fastqs, not this artifact)
+            if (!skip_merged_artifact) {
+                merged_results_ch = IMPORT_FASTQS_TO_QIIME2(
+                    exported_fastqs_ch.map { sample_id, r1, r2 -> [sample_id, [r1, r2]] }.collect(flat: false)
+                )
 
-            trimmed_sequences = merged_results_ch.sequences
-            trimmed_sequences_summary = merged_results_ch.sequences_summary
+                trimmed_sequences = merged_results_ch.sequences
+                trimmed_sequences_summary = merged_results_ch.sequences_summary
+            }
+            else {
+                trimmed_sequences = Channel.empty()
+                trimmed_sequences_summary = Channel.empty()
+            }
             individual_trimmed = trimmed_artifacts_ch[1]
         }
     else if (primer_forward != null || nextseq_trim != null) {

@@ -10,7 +10,7 @@ workflow TRIMMING {
     take:
     read_pairs_ch // Channel of [sample_id, [r1, r2]]
     barcode_primer_info_ch // Barcode/primer info (may be empty)
-    trimming_options // Map with enabled, use_sampleseq, nextseq_trim
+    trimming_options // Map with enabled, use_sampleseq, nextseq_trim, skip_qc, skip_merged_artifact
 
     main:
 
@@ -18,6 +18,8 @@ workflow TRIMMING {
         enabled: trimming_options.enabled,
         use_sampleseq: trimming_options.use_sampleseq ?: false,
         nextseq_trim: trimming_options.nextseq_trim ?: null,
+        skip_qc: trimming_options.skip_qc ?: false,
+        skip_merged_artifact: trimming_options.skip_merged_artifact ?: false,
     ]
 
     println "Trimming configuration in trimming_wf.nf: ${trimming_config}"
@@ -32,7 +34,8 @@ workflow TRIMMING {
             trimming_config.use_sampleseq,
             trimming_config.nextseq_trim,
             primers.forward ?: null,
-            primers.reverse ?: null
+            primers.reverse ?: null,
+            trimming_config.skip_merged_artifact
         )
 
         // Process exported fastqs for QC after cutadapt
@@ -42,13 +45,19 @@ workflow TRIMMING {
             }
             .set { trimmed_reads_ch }
 
-        // Run QC on trimmed reads
-        WF_QUALITY_CONTROL_AFTER_TRIM(trimmed_reads_ch)
-
         trimmed_sequences = trimming_results.trimmed_sequences
         trimmed_sequences_summary = trimming_results.trimmed_sequences_summary
-        fastqc_after_trim = WF_QUALITY_CONTROL_AFTER_TRIM.out.fastqc_results
-        multiqc_after_trim = WF_QUALITY_CONTROL_AFTER_TRIM.out.multiqc_report
+
+        // Run QC on trimmed reads (optional)
+        if (!trimming_config.skip_qc) {
+            WF_QUALITY_CONTROL_AFTER_TRIM(trimmed_reads_ch)
+            fastqc_after_trim = WF_QUALITY_CONTROL_AFTER_TRIM.out.fastqc_results
+            multiqc_after_trim = WF_QUALITY_CONTROL_AFTER_TRIM.out.multiqc_report
+        }
+        else {
+            fastqc_after_trim = Channel.empty()
+            multiqc_after_trim = Channel.empty()
+        }
     }
     else {
         // No trimming - pass through reads unchanged

@@ -37,6 +37,7 @@ workflow CLASSIFY_TAXONOMY {
         classifier_ch    // Channel of the pre-trained classifier (QZA)
         feature_table_ch // Channel of the feature table (QZA) for visualization
         metadata_file      // Channel of metadata (optional, for visualization)
+        skip_visualization // Boolean: classify only, no barplot
 
     main:
         // 1. Classify representative sequences
@@ -46,14 +47,19 @@ workflow CLASSIFY_TAXONOMY {
         )
         classification_results_ch = CLASSIFY_SKLEARN_QIIME2.out.classification_qza
 
-        // 2. Visualize taxonomic assignments using the common visualization workflow
-        taxonomy_viz_ch = VISUALIZE_TAXONOMY(
-            classification_results_ch,
-            feature_table_ch,
-            "taxonomy_barplot",
-            metadata_file ?: null // Use first metadata file if available
-        )
-        taxonomy_summary_ch = taxonomy_viz_ch.barplot
+        // 2. Visualize taxonomic assignments using the common visualization workflow (optional)
+        if (!skip_visualization) {
+            taxonomy_viz_ch = VISUALIZE_TAXONOMY(
+                classification_results_ch,
+                feature_table_ch,
+                "taxonomy_barplot",
+                metadata_file ?: null // Use first metadata file if available
+            )
+            taxonomy_summary_ch = taxonomy_viz_ch.barplot
+        }
+        else {
+            taxonomy_summary_ch = Channel.empty()
+        }
 
     emit:
         classification = classification_results_ch   // The .qza file with taxonomic assignments

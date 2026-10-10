@@ -15,13 +15,14 @@ workflow TAXONOMY {
     feature_table      // Filtered feature table
     metadata_file      // Metadata file
     database_ch_list   // Map with classifier and refs (trainset, species)
-    taxonomy_options   // Map with enable_dada2_taxonomy, enable_comparison
+    taxonomy_options   // Map with enable_dada2_taxonomy, enable_comparison, skip_summaries
 
     main:
 
     taxonomy_config = [
         enable_dada2_taxonomy: taxonomy_options?.enable_dada2_taxonomy ?: params.taxonomy?.enable_dada2_taxonomy ?: false,
         enable_comparison: taxonomy_options?.enable_comparison ?: params.taxonomy?.enable_comparison ?: false,
+        skip_summaries: taxonomy_options?.skip_summaries ?: false,
     ]
 
     // Taxonomic Classification with feature-classifier
@@ -30,6 +31,7 @@ workflow TAXONOMY {
         database_ch_list.classifier,
         feature_table,
         metadata_file,
+        taxonomy_config.skip_summaries,
     )
 
     classified_taxa_ch = taxonomy_results_ch.classification
@@ -80,12 +82,18 @@ workflow TAXONOMY {
         taxonomy_comparison_ch = Channel.empty()
     }
 
-    // Gram Staining Evaluation
-    WF_EVALUATE_GRAM_STAINING(
-        classified_taxa_ch,
-        feature_table,
-        metadata_file,
-    )
+    // Gram Staining Evaluation (optional)
+    if (!taxonomy_config.skip_summaries) {
+        WF_EVALUATE_GRAM_STAINING(
+            classified_taxa_ch,
+            feature_table,
+            metadata_file,
+        )
+        gram_staining_evaluation_ch = WF_EVALUATE_GRAM_STAINING.out.gram_staining_eval_results
+    }
+    else {
+        gram_staining_evaluation_ch = Channel.empty()
+    }
 
     emit:
     taxonomy = classified_taxa_ch
@@ -94,5 +102,5 @@ workflow TAXONOMY {
     dada2_taxonomy_summary = dada2_taxonomy_summary_ch
     taxonomy_evaluation = taxonomy_evaluation_ch
     taxonomy_comparison = taxonomy_comparison_ch
-    gram_staining_evaluation = WF_EVALUATE_GRAM_STAINING.out.gram_staining_eval_results
+    gram_staining_evaluation = gram_staining_evaluation_ch
 }

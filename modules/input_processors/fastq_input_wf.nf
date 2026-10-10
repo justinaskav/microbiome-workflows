@@ -28,8 +28,12 @@ workflow WF_FASTQ_INPUT {
     // Create empty sampleseq file channel since no SampleSeq_info.xls is needed
     sampleseq_file_ch = Channel.empty()
 
-    // Create empty barcode_primer_info channel since no SampleSeq parsing needed
-    barcode_primer_info_ch = Channel.empty()
+    // Per-sample barcode/primer table (same columns PARSE_SAMPLESEQ_INFO emits), for
+    // barcoded reads whose SampleSeq_info.xls is not shipped with the FASTQs (e.g. ENA).
+    def barcode_file = data_dir instanceof Map ? data_dir.barcode_primer_file : null
+    barcode_primer_info_ch = barcode_file
+        ? Channel.fromPath(barcode_file, checkIfExists: true)
+        : Channel.empty()
 
     emit:
     // Standardized outputs

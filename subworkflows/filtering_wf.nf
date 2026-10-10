@@ -13,7 +13,7 @@ workflow FILTERING {
     feature_table      // Feature table from DADA2
     rep_seqs           // Representative sequences from DADA2
     metadata_file      // Metadata file
-    decontam_options   // Map with method, freq_concentration_column, prev_control_column, prev_control_indicator, threshold
+    decontam_options   // Map with method, freq_concentration_column, prev_control_column, prev_control_indicator, threshold, skip_contaminant_taxonomy
     classifier         // Pre-trained taxonomy classifier (QZA) for contaminant classification
 
     main:
@@ -95,8 +95,8 @@ workflow FILTERING {
         contaminant_seqs = Channel.empty()
     }
 
-    // Classify contaminant sequences taxonomically (if decontam was performed)
-    if (decontam_config.method != "none") {
+    // Classify contaminant sequences taxonomically (if decontam was performed; optional)
+    if (decontam_config.method != "none" && !decontam_options?.skip_contaminant_taxonomy) {
         contaminant_taxonomy_ch = CLASSIFY_SKLEARN_QIIME2(
             contaminant_seqs,
             classifier

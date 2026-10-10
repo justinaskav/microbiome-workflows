@@ -53,8 +53,7 @@ for (method in distance_methods) {
   cat("Calculating", method, "...\n")
 
   if (method == "jaccard") {
-    tse <- mia::transformAssay(tse, method = "pa")
-    tse <- mia::addDissimilarity(tse, assay.type = "pa", method = "jaccard", niter = niter)
+    tse <- mia::addDissimilarity(tse, assay.type = "counts", method = "jaccard", niter = niter)
   } else if (method == "bray") {
     tse <- mia::addDissimilarity(tse, method = "bray", name = "bray", niter = niter)
   } else if (method == "unifrac_unweighted") {
