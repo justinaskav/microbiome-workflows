@@ -23,48 +23,24 @@ set.seed(seed)
 
 # Load required packages
 suppressPackageStartupMessages(library(dada2))
-if (grepl("\\.qza$", rep_seqs_file)) {
-  suppressPackageStartupMessages(library(qiime2R))
-}
 
-# Function to handle QIIME2 artifacts if qiime2R is not available
-extract_sequences_from_qza <- function(qza_file) {
-  # Create a temporary directory
-  temp_dir <- tempdir()
-  
-  # Unzip the QZA file (which is a zip archive)
-  message("Extracting QIIME2 artifact...")
-  system(paste("unzip -q -o", qza_file, "-d", temp_dir))
-  
-  # The data in a .qza file is typically in the data directory
-  data_dir <- file.path(temp_dir, "data")
-  
-  # Find the FASTA file (should be in the data directory)
-  fasta_files <- list.files(path = data_dir, pattern = "\\.fa$|\\.fasta$|\\.fna$", recursive = TRUE, full.names = TRUE)
-  
-  if (length(fasta_files) == 0) {
-    stop("No FASTA files found in the QIIME2 artifact")
+# Read the FASTA payload of a QIIME 2 artifact (.qza is a zip: <uuid>/data/dna-sequences.fasta)
+read_qza_fasta <- function(qza_file) {
+  members <- utils::unzip(qza_file, list = TRUE)$Name
+  fasta <- grep("^[^/]+/data/.*\\.(fa|fasta|fna)$", members, value = TRUE)
+  if (length(fasta) != 1) {
+    stop("Expected exactly one FASTA file in ", qza_file, ", found ", length(fasta))
   }
-  
-  # Read the first FASTA file found
-  seqs <- Biostrings::readDNAStringSet(fasta_files[1])
-  
-  return(seqs)
+  exdir <- tempfile("qza_")
+  utils::unzip(qza_file, files = fasta, exdir = exdir, junkpaths = TRUE)
+  Biostrings::readDNAStringSet(file.path(exdir, basename(fasta)))
 }
 
 # Read representative sequences
 message("Reading representative sequences...")
 if (grepl("\\.qza$", rep_seqs_file)) {
-  # Try to use qiime2R if available
-  if (requireNamespace("qiime2R", quietly = TRUE)) {
-    message("Using qiime2R to read QIIME2 artifact...")
-    seqs <- qiime2R::read_qza(rep_seqs_file)$data
-  } else {
-    # Fall back to manual extraction
-    seqs <- extract_sequences_from_qza(rep_seqs_file)
-  }
+  seqs <- read_qza_fasta(rep_seqs_file)
 } else {
-  # Handle regular FASTA file
   seqs <- Biostrings::readDNAStringSet(rep_seqs_file)
 }
 

@@ -26,34 +26,6 @@ set.seed(seed)
 # Load required packages
 suppressPackageStartupMessages(library(dada2))
 suppressPackageStartupMessages(library(Biostrings))
-if (grepl("\\.qza$", rep_seqs_file)) {
-  suppressPackageStartupMessages(library(qiime2R))
-}
-
-# Function to handle QIIME2 artifacts if qiime2R is not available
-extract_sequences_from_qza <- function(qza_file) {
-  # Create a temporary directory
-  temp_dir <- tempdir()
-  
-  # Unzip the QZA file (which is a zip archive)
-  message("Extracting QIIME2 artifact...")
-  system(paste("unzip -q -o", qza_file, "-d", temp_dir))
-  
-  # The data in a .qza file is typically in the data directory
-  data_dir <- file.path(temp_dir, "data")
-  
-  # Find the FASTA file (should be in the data directory)
-  fasta_files <- list.files(path = data_dir, pattern = "\\.fa$|\\.fasta$|\\.fna$", recursive = TRUE, full.names = TRUE)
-  
-  if (length(fasta_files) == 0) {
-    stop("No FASTA files found in the QIIME2 artifact")
-  }
-  
-  # Read the first FASTA file found
-  seqs <- Biostrings::readDNAStringSet(fasta_files[1])
-  
-  return(seqs)
-}
 
 # Read the taxonomy from assignTaxonomy
 message("Loading taxonomy assignments...")
