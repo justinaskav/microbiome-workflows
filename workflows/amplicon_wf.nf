@@ -66,11 +66,13 @@ workflow AMPLICON_WORKFLOW {
             trimming_options + [skip_qc: skip_qc, skip_merged_artifact: skip_summaries],
         )
         reads_after_trim = trimming_results.trimmed_reads
+        cutadapt_stats_ch = trimming_results.trimming_stats
         fastqc_after_cutadapt = trimming_results.fastqc_results_after_trim
         multiqc_after_cutadapt = trimming_results.multiqc_report_after_trim
     }
     else {
         reads_after_trim = input_processing_results.read_pairs_ch
+        cutadapt_stats_ch = Channel.empty()
         fastqc_after_cutadapt = Channel.empty()
         multiqc_after_cutadapt = Channel.empty()
     }
@@ -181,6 +183,7 @@ workflow AMPLICON_WORKFLOW {
     )
 
     emit:
+    cutadapt_stats = cutadapt_stats_ch
     fastqc_results = fastqc_results_ch
     multiqc_report = multiqc_report_ch
     host_alignment_multiqc = host_results.multiqc_report

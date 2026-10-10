@@ -42,6 +42,7 @@ process TRIM_CUTADAPT {
 
     output:
     tuple val(sampleId), path("${sampleId}_trimmed.qza"), emit: trimmed_artifact
+    tuple val(sampleId), path("${sampleId}_cutadapt_stats.qza"), emit: trimming_stats
 
     script:
     def discard_untrimmed = true
@@ -61,6 +62,7 @@ process TRIM_CUTADAPT {
       --p-discard-untrimmed \
       ${nextseq_arg} \
       --o-trimmed-sequences ${sampleId}_trimmed.qza \
+      --o-stats ${sampleId}_cutadapt_stats.qza \
       --verbose
     """
 }
@@ -166,6 +168,7 @@ process TRIM_MERGED_CUTADAPT {
     output:
     path "trimmed_sequences.qza", emit: trimmed_sequences
     path "trimmed_sequences_summary.qzv", emit: trimmed_sequences_summary
+    path "cutadapt_stats.qza", emit: trimming_stats
 
     script:
     def minimum_length = params.cutadapt?.minimum_length ?: 100
@@ -184,6 +187,7 @@ process TRIM_MERGED_CUTADAPT {
       ${nextseq_arg} \
       --p-minimum-length ${minimum_length} \
       --o-trimmed-sequences trimmed_sequences.qza \
+      --o-stats cutadapt_stats.qza \
       --verbose
 
     qiime demux summarize \
@@ -266,7 +270,8 @@ workflow WF_CUTADAPT {
             // Run cutadapt for each sample (primers + optional nextseq-trim in one pass)
             trimmed_artifacts_ch = TRIM_CUTADAPT(
                 trimming_input_ch
-            )
+            ).trimmed_artifact
+            trimming_stats_ch = TRIM_CUTADAPT.out.trimming_stats.map { _sample_id, stats -> stats }
 
             // Export trimmed sequences to fastq
             exported_fastqs_ch = EXPORT_QIIME2_SEQUENCES(trimmed_artifacts_ch)
@@ -285,7 +290,7 @@ workflow WF_CUTADAPT {
                 trimmed_sequences = Channel.empty()
                 trimmed_sequences_summary = Channel.empty()
             }
-            individual_trimmed = trimmed_artifacts_ch[1]
+            individual_trimmed = trimmed_artifacts_ch.map { _sample_id, artifact -> artifact }
         }
     else if (primer_forward != null || nextseq_trim != null) {
         // OPTIMIZED PATH: Direct import → single cutadapt call → DADA2
@@ -316,10 +321,12 @@ workflow WF_CUTADAPT {
 
         trimmed_sequences = trim_results.trimmed_sequences
         trimmed_sequences_summary = trim_results.trimmed_sequences_summary
+        trimming_stats_ch = trim_results.trimming_stats
         individual_trimmed = Channel.empty()
     }
     else {
         // No primers or nextseq-trim - just import and summarize via manifest
+        trimming_stats_ch = Channel.empty()
         import_results = IMPORT_FASTQS_TO_QIIME2(read_pairs_ch.collect(flat: false))
 
         trimmed_sequences = import_results.sequences
@@ -344,4 +351,5 @@ workflow WF_CUTADAPT {
     trimmed_sequences_summary = trimmed_sequences_summary //.qzv summary
     individual_trimmed = individual_trimmed // Individual trimmed artifacts
     exported_fastqs = exported_fastqs_ch // Exported fastq files
+    trimming_stats = trimming_stats_ch // Cutadapt statistics artifacts
 }

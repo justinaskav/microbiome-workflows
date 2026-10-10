@@ -67,12 +67,13 @@ workflow CREATE_REF_DB_CLASSIFIER {
 
     main:
     // Process the reference database
-    processed_data_ch = WF_PROCESS_REF_DB(
+    processed_result = WF_PROCESS_REF_DB(
         meta,
         db_type,
         db_config,
         processing_config
-    ).processed_data
+    )
+    processed_data_ch = processed_result.processed_data
 
     // Create the classifier
     classifier_ch = CREATE_NB_CLASSIFIER(
@@ -97,6 +98,7 @@ workflow CREATE_REF_DB_CLASSIFIER {
 
     emit:
     classifier = classifier_ch
+    read_extraction_stats = processed_result.read_extraction_stats
     evaluation = evaluation_ch
     predicted_taxonomy = predicted_taxonomy_ch
     processed_sequences = processed_data_ch.map { _meta, seqs, tax -> tuple(meta, seqs) }
@@ -151,6 +153,7 @@ workflow CREATE_SILVA_CLASSIFIER {
     classifier = result.classifier
     evaluation = result.evaluation
     ref_seqs   = result.processed_sequences.map { _meta, seqs -> seqs }
+    read_extraction_stats = result.read_extraction_stats
 }
 
 workflow CREATE_UNITE_CLASSIFIER {

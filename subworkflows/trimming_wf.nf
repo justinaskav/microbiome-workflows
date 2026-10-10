@@ -47,6 +47,7 @@ workflow TRIMMING {
 
         trimmed_sequences = trimming_results.trimmed_sequences
         trimmed_sequences_summary = trimming_results.trimmed_sequences_summary
+        trimming_stats_ch = trimming_results.trimming_stats
 
         // Run QC on trimmed reads (optional)
         if (!trimming_config.skip_qc) {
@@ -64,6 +65,7 @@ workflow TRIMMING {
         trimmed_reads_ch = read_pairs_ch
         trimmed_sequences = Channel.empty()
         trimmed_sequences_summary = Channel.empty()
+        trimming_stats_ch = Channel.empty()
         fastqc_after_trim = Channel.empty()
         multiqc_after_trim = Channel.empty()
     }
@@ -72,6 +74,7 @@ workflow TRIMMING {
     trimmed_reads = trimmed_reads_ch
     trimmed_sequences = trimmed_sequences
     trimmed_sequences_summary = trimmed_sequences_summary
+    trimming_stats = trimming_stats_ch
     fastqc_results_after_trim = fastqc_after_trim
     multiqc_report_after_trim = multiqc_after_trim
 }

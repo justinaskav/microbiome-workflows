@@ -145,6 +145,7 @@ process EXTRACT_READS {
 
     output:
     tuple val(meta), path("${meta.id}-extracted.qza"), emit: extracted_sequences
+    tuple val(meta), path("${meta.id}-read-extraction-stats.qza"), emit: read_extraction_stats
 
     script:
     """
@@ -155,6 +156,7 @@ process EXTRACT_READS {
         --p-n-jobs ${task.cpus} \
         --p-read-orientation 'forward' \
         --o-reads "${meta.id}-extracted.qza" \
+        --o-read-extraction-stats "${meta.id}-read-extraction-stats.qza" \
         --verbose
     """
 }
@@ -230,12 +232,14 @@ workflow WF_PROCESS_REF_DB {
             processing_config.f_primer,
             processing_config.r_primer
         ).extracted_sequences
+        read_extraction_stats_ch = EXTRACT_READS.out.read_extraction_stats
 
         // Rejoin with taxonomy
         final_seqs_ch = extracted_seqs_ch
         final_tax_ch = dereplicated_ch.map { _meta, seqs, tax -> tuple(_meta, tax) }
     } else {
         // Use full-length dereplicated sequences
+        read_extraction_stats_ch = Channel.empty()
         final_seqs_ch = dereplicated_ch.map { _meta, seqs, tax -> tuple(_meta, seqs) }
         final_tax_ch = dereplicated_ch.map { _meta, seqs, tax -> tuple(_meta, tax) }
     }
@@ -245,4 +249,5 @@ workflow WF_PROCESS_REF_DB {
 
     emit:
     processed_data = processed_data_ch  // [meta, sequences.qza, taxonomy.qza]
+    read_extraction_stats = read_extraction_stats_ch // [meta, statistics.qza]
 }

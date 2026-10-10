@@ -41,11 +41,13 @@ workflow AMPLICON_TRIMMING_ONLY {
         )
 
         reads_after_trim = trimming_results.trimmed_reads
+        cutadapt_stats_ch = trimming_results.trimming_stats
         trimmed_qza = trimming_results.trimmed_sequences
         fastqc_after_cutadapt = trimming_results.fastqc_results_after_trim
         multiqc_after_cutadapt = trimming_results.multiqc_report_after_trim
     } else {
         reads_after_trim = input_processing_results.read_pairs_ch
+        cutadapt_stats_ch = Channel.empty()
         trimmed_qza = Channel.empty()
         fastqc_after_cutadapt = Channel.empty()
         multiqc_after_cutadapt = Channel.empty()
@@ -61,6 +63,7 @@ workflow AMPLICON_TRIMMING_ONLY {
     trimmed_reads_ch = host_results.reads_out
 
     emit:
+    cutadapt_stats = cutadapt_stats_ch
     trimmed_reads = trimmed_reads_ch
     trimmed_qza = trimmed_qza
     metadata_file = metadata_to_use
