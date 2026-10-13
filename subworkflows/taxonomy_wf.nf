@@ -15,13 +15,14 @@ workflow TAXONOMY {
     feature_table      // Filtered feature table
     metadata_file      // Metadata file
     database_ch_list   // Map with classifier and refs (trainset, species)
-    taxonomy_options   // Map with enable_dada2_taxonomy, enable_comparison, skip_summaries
+    taxonomy_options   // Map with enable_dada2_taxonomy, enable_comparison, skip_gram_staining, skip_summaries
 
     main:
 
     taxonomy_config = [
         enable_dada2_taxonomy: taxonomy_options?.enable_dada2_taxonomy ?: params.taxonomy?.enable_dada2_taxonomy ?: false,
         enable_comparison: taxonomy_options?.enable_comparison ?: params.taxonomy?.enable_comparison ?: false,
+        skip_gram_staining: taxonomy_options?.skip_gram_staining ?: params.taxonomy?.skip_gram_staining ?: false,
         skip_summaries: taxonomy_options?.skip_summaries ?: false,
     ]
 
@@ -83,7 +84,7 @@ workflow TAXONOMY {
     }
 
     // Gram Staining Evaluation (optional)
-    if (!taxonomy_config.skip_summaries) {
+    if (!taxonomy_config.skip_summaries && !taxonomy_config.skip_gram_staining) {
         WF_EVALUATE_GRAM_STAINING(
             classified_taxa_ch,
             feature_table,
